@@ -2,7 +2,7 @@
 
 Lightweight ComfyUI node for adding either a camera-style text bar or a logo/signature watermark.
 
-No pip install. No comfy-env. No custom frontend.
+No pip install. No comfy-env.
 
 ## Install
 
@@ -18,19 +18,22 @@ Restart ComfyUI, then search:
 Free Camera Watermark
 ```
 
-## Simple Controls
+## Transform Box
 
-- `watermark_mode`: choose `Text` or `Logo`.
-- `placement`: choose a safe preset position.
-- `offset_x`: move left/right from the preset.
-- `offset_y`: move up/down from the preset.
-- `scale`: resize the active watermark.
+The node includes a small transform box inside the node UI:
 
-These controls replace separate `logo_x`, `logo_y`, `bar_x`, `bar_y`, `text_x`, and `text_y` fields to keep the node harder to break.
+- Drag the box to move the active watermark.
+- Drag the bottom-right corner to scale it.
+- The hidden `position_x`, `position_y`, and `scale` values are saved in the workflow.
+
+This is a lightweight node-local controller, not a full image editor on the main preview canvas.
+
+## Mode
+
+- `watermark_mode = Text`: use the text lines and white bar. Logo input is ignored.
+- `watermark_mode = Logo`: use the connected logo/signature image. Text and bar settings are ignored.
 
 ## Text Mode
-
-Text mode ignores the `logo` input.
 
 - `line_1`, `line_2`, `line_3`: text lines.
 - `font_size`: base text size.
@@ -39,16 +42,14 @@ Text mode ignores the `logo` input.
 - `text_color`: text color, for example `#000000`.
 - `bar_color`: bar color, for example `#ffffff`.
 
-In Text mode, `scale` changes both the text size and the bar height.
+In Text mode, the transform box `scale` changes both the text size and the bar height.
 
 ## Logo Mode
 
-Logo mode ignores text and bar settings.
-
 - Connect a logo/signature image to `logo`.
 - If using a transparent PNG from ComfyUI `LoadImage`, also connect its `mask` output to `logo_mask`.
-- Use `placement`, `offset_x`, `offset_y`, and `scale` to control position and size.
+- Use the transform box to control position and size.
 
 ## Notes
 
-This is a backend-only lightweight node. It does not include a mouse-drag transform UI, upload files, read EXIF, or remove metadata.
+This node composites pixels into the output image. It does not upload files, read EXIF, or remove metadata.
