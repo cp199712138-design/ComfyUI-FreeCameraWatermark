@@ -5,20 +5,11 @@ import torch
 from PIL import Image, ImageDraw, ImageFont
 
 
-POSITIONS = [
-    "Bottom Center",
-    "Bottom Left",
-    "Bottom Right",
-    "Center",
-    "Top Left",
-    "Top Center",
-    "Top Right",
-]
+WEB_DIRECTORY = "./js"
 
 TIP_MODE = "Choose Text or Logo. Text mode ignores logo input; Logo mode ignores text lines and bar."
-TIP_PLACEMENT = "Preset position. Use offset_x/offset_y for small adjustments."
-TIP_OFFSET = "Pixel adjustment after placement. Positive moves right/down; negative moves left/up."
-TIP_SCALE = "Overall size control. Text mode scales font and bar; Logo mode scales the logo."
+TIP_POSITION = "Controlled by the transform box. 0 is left/top, 100 is right/bottom."
+TIP_SCALE = "Controlled by the transform box. Text mode scales font and bar; Logo mode scales the logo."
 
 
 def _tensor_to_pil(image):
@@ -102,22 +93,8 @@ def _load_font(size):
     return ImageFont.load_default()
 
 
-def _placed_xy(placement, canvas_width, canvas_height, item_width, item_height, offset_x, offset_y, margin):
-    if "Left" in placement:
-        x = margin
-    elif "Right" in placement:
-        x = canvas_width - item_width - margin
-    else:
-        x = (canvas_width - item_width) // 2
-
-    if "Top" in placement:
-        y = margin
-    elif "Bottom" in placement:
-        y = canvas_height - item_height - margin
-    else:
-        y = (canvas_height - item_height) // 2
-
-    return int(x + offset_x), int(y + offset_y)
+def _center_to_xy(center_x, center_y, item_width, item_height):
+    return int(center_x - item_width / 2), int(center_y - item_height / 2)
 
 
 def _text_block_size(draw, lines, font, line_spacing):
@@ -139,9 +116,8 @@ class FreeCameraWatermark:
             "required": {
                 "image": ("IMAGE",),
                 "watermark_mode": (["Text", "Logo"], {"default": "Text", "tooltip": TIP_MODE}),
-                "placement": (POSITIONS, {"default": "Bottom Center", "tooltip": TIP_PLACEMENT}),
-                "offset_x": ("INT", {"default": 0, "min": -4096, "max": 4096, "step": 1, "tooltip": TIP_OFFSET}),
-                "offset_y": ("INT", {"default": 0, "min": -4096, "max": 4096, "step": 1, "tooltip": TIP_OFFSET}),
+                "position_x": ("FLOAT", {"default": 50.0, "min": 0.0, "max": 100.0, "step": 0.1, "tooltip": TIP_POSITION}),
+                "position_y": ("FLOAT", {"default": 88.0, "min": 0.0, "max": 100.0, "step": 0.1, "tooltip": TIP_POSITION}),
                 "scale": ("FLOAT", {"default": 1.0, "min": 0.05, "max": 8.0, "step": 0.01, "tooltip": TIP_SCALE}),
                 "line_1": ("STRING", {"default": "iPhone 18 SuperPro Max"}),
                 "line_2": ("STRING", {"default": "Main Camera"}),
@@ -162,15 +138,14 @@ class FreeCameraWatermark:
     RETURN_NAMES = ("image",)
     FUNCTION = "apply_watermark"
     CATEGORY = "image/watermark"
-    DESCRIPTION = "Add either a simple text camera bar or a movable logo watermark."
+    DESCRIPTION = "Add either a simple text camera bar or a draggable logo watermark."
 
     def apply_watermark(
         self,
         image,
         watermark_mode,
-        placement,
-        offset_x,
-        offset_y,
+        position_x,
+        position_y,
         scale,
         line_1,
         line_2,
@@ -187,15 +162,16 @@ class FreeCameraWatermark:
 
         for index in range(image.shape[0]):
             base = _tensor_to_pil(image[index])
+            center_x = base.width * max(0.0, min(100.0, float(position_x))) / 100.0
+            center_y = base.height * max(0.0, min(100.0, float(position_y))) / 100.0
 
             if watermark_mode == "Logo" and logo is not None:
-                self._apply_logo(base, logo, logo_mask, index, placement, offset_x, offset_y, scale)
+                self._apply_logo(base, logo, logo_mask, index, center_x, center_y, scale)
             elif watermark_mode == "Text":
                 self._apply_text_bar(
                     base,
-                    placement,
-                    offset_x,
-                    offset_y,
+                    center_x,
+                    center_y,
                     scale,
                     [line_1, line_2, line_3],
                     font_size,
@@ -209,7 +185,7 @@ class FreeCameraWatermark:
 
         return (torch.stack(output_images, dim=0),)
 
-    def _apply_logo(self, base, logo, logo_mask, index, placement, offset_x, offset_y, scale):
+    def _apply_logo(self, base, logo, logo_mask, index, center_x, center_y, scale):
         logo_index = index if logo.shape[0] > 1 else 0
         logo_image = _tensor_to_pil(logo[logo_index])
         if logo_mask is not None:
@@ -219,24 +195,14 @@ class FreeCameraWatermark:
         scaled_height = max(1, int(logo_image.height * float(scale)))
         logo_image = logo_image.resize((scaled_width, scaled_height), Image.LANCZOS)
 
-        x, y = _placed_xy(
-            placement,
-            base.width,
-            base.height,
-            scaled_width,
-            scaled_height,
-            offset_x,
-            offset_y,
-            margin=24,
-        )
+        x, y = _center_to_xy(center_x, center_y, scaled_width, scaled_height)
         base.alpha_composite(logo_image, (x, y))
 
     def _apply_text_bar(
         self,
         base,
-        placement,
-        offset_x,
-        offset_y,
+        center_x,
+        center_y,
         scale,
         lines,
         font_size,
@@ -252,37 +218,26 @@ class FreeCameraWatermark:
         scaled_font_size = max(6, int(font_size * float(scale)))
         scaled_bar_height = max(0, int(bar_height * float(scale)))
         line_spacing = max(1, int(scaled_font_size * 0.25))
-        margin = max(12, int(scaled_font_size * 0.75))
 
         draw = ImageDraw.Draw(base)
         font = _load_font(scaled_font_size)
         text_width, text_height, line_heights = _text_block_size(draw, clean_lines, font, line_spacing)
         group_height = max(text_height, scaled_bar_height)
-
-        x, group_y = _placed_xy(
-            placement,
-            base.width,
-            base.height,
-            text_width,
-            group_height,
-            offset_x,
-            offset_y,
-            margin=0,
-        )
+        text_x, group_y = _center_to_xy(center_x, center_y, text_width, group_height)
 
         if scaled_bar_height > 0 and bar_opacity > 0:
             overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
             overlay_draw = ImageDraw.Draw(overlay)
-            by = group_y + (group_height - scaled_bar_height) // 2
+            by = int(center_y - scaled_bar_height / 2)
             fill = _parse_color(bar_color, (255, 255, 255)) + (int(bar_opacity),)
             overlay_draw.rectangle([0, by, base.width, by + scaled_bar_height], fill=fill)
             base.alpha_composite(overlay)
 
-        text_y = group_y + (group_height - text_height) // 2
+        text_y = int(group_y + (group_height - text_height) / 2)
         color = _parse_color(text_color, (0, 0, 0)) + (255,)
         cursor_y = text_y
         for line, line_height in zip(clean_lines, line_heights):
-            draw.text((x, cursor_y), line, fill=color, font=font)
+            draw.text((text_x, cursor_y), line, fill=color, font=font)
             cursor_y += line_height + line_spacing
 
 
@@ -293,3 +248,5 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "FreeCameraWatermark": "Free Camera Watermark",
 }
+
+__all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]
