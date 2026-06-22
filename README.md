@@ -1,6 +1,6 @@
 # ComfyUI-FreeCameraWatermark
 
-Lightweight ComfyUI node for adding a camera-style watermark bar, text, and an optional signature/logo image.
+Lightweight ComfyUI node for adding either a camera-style text bar or a logo/signature watermark.
 
 No pip install. No comfy-env. No custom frontend.
 
@@ -18,38 +18,37 @@ Restart ComfyUI, then search:
 Free Camera Watermark
 ```
 
-## Inputs
+## Simple Controls
 
-- `image`: main image.
-- `logo`: optional signature/logo image.
-- `logo_mask`: optional mask output from ComfyUI `LoadImage`; connect it when using a transparent PNG logo.
-- `line_1`, `line_2`, `line_3`: up to three text lines.
-- `logo_x`, `logo_y`: logo position in pixels.
-- `logo_scale`: logo size multiplier. `1.0` keeps the original loaded logo size.
-- `bar_x`, `bar_y`: white bar position in pixels.
-- `bar_width`: bar width in pixels. `0` means full remaining width.
-- `bar_height`: bar height in pixels. `0` disables the bar.
-- `text_x`, `text_y`: text position in pixels.
-- `font_size`: text size.
-- `line_spacing`: space between text lines.
+- `watermark_mode`: choose `Text` or `Logo`.
+- `placement`: choose a safe preset position.
+- `offset_x`: move left/right from the preset.
+- `offset_y`: move up/down from the preset.
+- `scale`: resize the active watermark.
+
+These controls replace separate `logo_x`, `logo_y`, `bar_x`, `bar_y`, `text_x`, and `text_y` fields to keep the node harder to break.
+
+## Text Mode
+
+Text mode ignores the `logo` input.
+
+- `line_1`, `line_2`, `line_3`: text lines.
+- `font_size`: base text size.
+- `bar_height`: base white bar height. Set to `0` to hide the bar.
+- `bar_opacity`: `0` is transparent, `255` is opaque.
 - `text_color`: text color, for example `#000000`.
 - `bar_color`: bar color, for example `#ffffff`.
-- `bar_opacity`: `0` is fully transparent, `255` is fully opaque.
 
-## Coordinate Rule
+In Text mode, `scale` changes both the text size and the bar height.
 
-Coordinates are pixel values:
+## Logo Mode
 
-- `0` starts from the left/top edge.
-- Negative values count from the right/bottom edge.
+Logo mode ignores text and bar settings.
 
-Examples:
-
-- `text_x = 48`: text starts 48 px from the left.
-- `text_y = -140`: text sits near the bottom.
-- `logo_x = -240`: logo sits near the right side.
-- `bar_y = -180`: bar sits at the bottom.
+- Connect a logo/signature image to `logo`.
+- If using a transparent PNG from ComfyUI `LoadImage`, also connect its `mask` output to `logo_mask`.
+- Use `placement`, `offset_x`, `offset_y`, and `scale` to control position and size.
 
 ## Notes
 
-This node only composites pixels into the image. It does not remove metadata, read EXIF, upload files, or provide a drag UI.
+This is a backend-only lightweight node. It does not include a mouse-drag transform UI, upload files, read EXIF, or remove metadata.
