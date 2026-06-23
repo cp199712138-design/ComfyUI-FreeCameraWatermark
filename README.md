@@ -1,8 +1,8 @@
 # ComfyUI-FreeCameraWatermark
 
-Lightweight ComfyUI node for adding either a camera-style text bar or a logo/signature watermark.
+Lightweight ComfyUI node for camera-style watermarks, signatures, transparent logos, and simple decorative patterns.
 
-No pip install. No comfy-env.
+No pip install. No comfy-env. No external runtime.
 
 ## Install
 
@@ -18,38 +18,94 @@ Restart ComfyUI, then search:
 Free Camera Watermark
 ```
 
+## Basic Use
+
+Connect your main image to `image`.
+
+Choose `mode`:
+
+- `Text`: draw 1-3 text lines.
+- `Logo`: draw only the connected logo/signature image.
+- `Logo + Text`: draw a logo and text together.
+- `Camera Bar`: draw text on a camera-style bottom bar.
+- `Transparent Watermark`: draw a low-opacity logo or text watermark.
+- `Pattern Watermark`: draw a lightweight generated pattern.
+
+For a logo or signature, connect `logo`. If the logo comes from ComfyUI `Load Image`, connect its `mask` output to `logo_mask` for transparency.
+
 ## Transform Box
 
-The node includes a small transform box inside the node UI:
+The node has a small transform box inside the node UI:
 
-- Drag the box to move the active watermark.
-- Drag the bottom-right corner to scale it.
-- The hidden `position_x`, `position_y`, and `scale` values are saved in the workflow.
+- Drag the box to move the watermark.
+- Drag the bottom-right corner to resize it.
+- `Reset Layout` returns to automatic layout.
+- `Center`, `Bottom`, and `Fit Width` are quick layout helpers.
+- `Random Pattern` changes only the pattern seed.
 
-This is a lightweight node-local controller, not a full image editor on the main preview canvas.
+The transform box saves its values in hidden `layout_json`, so workflows keep the position and size without showing extra numeric controls.
 
-## Mode
+## Presets
 
-- `watermark_mode = Text`: use the text lines and white bar. Logo input is ignored.
-- `watermark_mode = Logo`: use the connected logo/signature image. Text and bar settings are ignored.
+- `Auto`: chooses a sensible layout from image shape and mode.
+- `Bottom Camera Bar`: classic bottom white bar.
+- `Minimal Bottom Caption`: smaller bottom caption.
+- `Center Transparent Text`: centered transparent text.
+- `Tiled Transparent Logo`: repeated transparent logo.
+- `Bottom Right Logo`: small logo near the lower-right.
+- `Logo Left + Text Right`: compact logo and text block.
+- `Soft Pattern Overlay`: full-image light pattern.
+- `Signature Center`: signature-like centered text.
+- `Custom`: keeps the transform box layout.
 
-## Text Mode
+## Fonts
 
-- `line_1`, `line_2`, `line_3`: text lines.
-- `font_size`: base text size.
-- `bar_height`: base white bar height. Set to `0` to hide the bar.
-- `bar_opacity`: `0` is transparent, `255` is opaque.
-- `text_color`: text color, for example `#000000`.
-- `bar_color`: bar color, for example `#ffffff`.
+Bundled lightweight fonts:
 
-In Text mode, the transform box `scale` changes both the text size and the bar height.
+- `Signature`: Caveat, good for handwritten signatures.
+- `Editorial`: Playfair Display, good for elegant camera-card text.
+- `Tech`: Orbitron, good for digital/camera UI style.
+- `System Default`: uses installed system fonts.
+- `CJK System`: tries common Windows Chinese fonts.
 
-## Logo Mode
+Optional Chinese display fonts can be placed in `optional_fonts`:
 
-- Connect a logo/signature image to `logo`.
-- If using a transparent PNG from ComfyUI `LoadImage`, also connect its `mask` output to `logo_mask`.
-- Use the transform box to control position and size.
+- `LXGWWenKai-Regular.ttf` for `CJK Handwritten Optional`.
+- `SmileySans-Oblique.ttf` for `CJK Display Optional`.
+
+The node will fall back to system fonts if optional files are not present.
+
+## Color And Opacity
+
+Colors use hex strings such as:
+
+```text
+#ffffff
+#000000
+#88ccff
+```
+
+Opacity values use `0-255`:
+
+- `0`: invisible.
+- `32`: very light transparent watermark.
+- `128`: half transparent.
+- `255`: fully opaque.
+
+## Patterns
+
+`Pattern Watermark` is generated locally with PIL. It does not download images.
+
+Pattern types:
+
+- `Dots`
+- `Diagonal Lines`
+- `Soft Waves`
+- `Tiny Stars`
+- `Gradient Blocks`
+
+`pattern_density` controls how many marks appear. `pattern_scale_min` and `pattern_scale_max` control the size range. `pattern_seed` makes the result repeatable.
 
 ## Notes
 
-This node composites pixels into the output image. It does not upload files, read EXIF, or remove metadata.
+This node composites pixels into the output image. It does not remove metadata, upload files, or edit source images.
