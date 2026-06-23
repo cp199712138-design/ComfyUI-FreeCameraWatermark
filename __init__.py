@@ -15,41 +15,41 @@ FONTS_DIR = os.path.join(ROOT_DIR, "fonts")
 OPTIONAL_FONTS_DIR = os.path.join(ROOT_DIR, "optional_fonts")
 
 MODES = [
-    "文字",
+    "\u6587\u5b57",
     "Logo",
-    "Logo+文字",
-    "相机白条",
-    "透明水印",
-    "图案水印",
+    "Logo+\u6587\u5b57",
+    "\u76f8\u673a\u767d\u6761",
+    "\u900f\u660e\u6c34\u5370",
+    "\u56fe\u6848\u6c34\u5370",
 ]
 PRESETS = [
-    "自动",
-    "底部白条",
-    "底部小字",
-    "居中文字",
-    "平铺Logo",
-    "右下Logo",
-    "Logo左文字右",
-    "柔和图案",
-    "居中签名",
-    "自定义",
+    "\u81ea\u52a8",
+    "\u5e95\u90e8\u767d\u6761",
+    "\u5e95\u90e8\u5c0f\u5b57",
+    "\u5c45\u4e2d\u6587\u5b57",
+    "\u5e73\u94faLogo",
+    "\u53f3\u4e0bLogo",
+    "Logo\u5de6\u6587\u5b57\u53f3",
+    "\u67d4\u548c\u56fe\u6848",
+    "\u5c45\u4e2d\u7b7e\u540d",
+    "\u81ea\u5b9a\u4e49",
 ]
 FONT_STYLES = [
-    "默认",
-    "手写",
-    "优雅",
-    "科技",
-    "中文系统",
-    "中文手写(可选)",
-    "中文标题(可选)",
+    "\u9ed8\u8ba4",
+    "\u624b\u5199",
+    "\u4f18\u96c5",
+    "\u79d1\u6280",
+    "\u4e2d\u6587\u7cfb\u7edf",
+    "\u4e2d\u6587\u624b\u5199(\u53ef\u9009)",
+    "\u4e2d\u6587\u6807\u9898(\u53ef\u9009)",
 ]
 PATTERN_TYPES = [
-    "无",
-    "圆点",
-    "斜线",
-    "波纹",
-    "星光",
-    "色块",
+    "\u65e0",
+    "\u5706\u70b9",
+    "\u659c\u7ebf",
+    "\u6ce2\u7eb9",
+    "\u661f\u5149",
+    "\u8272\u5757",
 ]
 
 LEGACY_MODES = [
@@ -95,41 +95,41 @@ FONT_STYLE_CHOICES = list(dict.fromkeys(FONT_STYLES + LEGACY_FONT_STYLES))
 PATTERN_TYPE_CHOICES = list(dict.fromkeys(PATTERN_TYPES + LEGACY_PATTERN_TYPES))
 
 MODE_ALIASES = {
-    "文字": "Text",
+    "\u6587\u5b57": "Text",
     "Logo": "Logo",
-    "Logo+文字": "Logo + Text",
-    "相机白条": "Camera Bar",
-    "透明水印": "Transparent Watermark",
-    "图案水印": "Pattern Watermark",
+    "Logo+\u6587\u5b57": "Logo + Text",
+    "\u76f8\u673a\u767d\u6761": "Camera Bar",
+    "\u900f\u660e\u6c34\u5370": "Transparent Watermark",
+    "\u56fe\u6848\u6c34\u5370": "Pattern Watermark",
 }
 PRESET_ALIASES = {
-    "自动": "Auto",
-    "底部白条": "Bottom Camera Bar",
-    "底部小字": "Minimal Bottom Caption",
-    "居中文字": "Center Transparent Text",
-    "平铺Logo": "Tiled Transparent Logo",
-    "右下Logo": "Bottom Right Logo",
-    "Logo左文字右": "Logo Left + Text Right",
-    "柔和图案": "Soft Pattern Overlay",
-    "居中签名": "Signature Center",
-    "自定义": "Custom",
+    "\u81ea\u52a8": "Auto",
+    "\u5e95\u90e8\u767d\u6761": "Bottom Camera Bar",
+    "\u5e95\u90e8\u5c0f\u5b57": "Minimal Bottom Caption",
+    "\u5c45\u4e2d\u6587\u5b57": "Center Transparent Text",
+    "\u5e73\u94faLogo": "Tiled Transparent Logo",
+    "\u53f3\u4e0bLogo": "Bottom Right Logo",
+    "Logo\u5de6\u6587\u5b57\u53f3": "Logo Left + Text Right",
+    "\u67d4\u548c\u56fe\u6848": "Soft Pattern Overlay",
+    "\u5c45\u4e2d\u7b7e\u540d": "Signature Center",
+    "\u81ea\u5b9a\u4e49": "Custom",
 }
 FONT_ALIASES = {
-    "默认": "System Default",
-    "手写": "Signature",
-    "优雅": "Editorial",
-    "科技": "Tech",
-    "中文系统": "CJK System",
-    "中文手写(可选)": "CJK Handwritten Optional",
-    "中文标题(可选)": "CJK Display Optional",
+    "\u9ed8\u8ba4": "System Default",
+    "\u624b\u5199": "Signature",
+    "\u4f18\u96c5": "Editorial",
+    "\u79d1\u6280": "Tech",
+    "\u4e2d\u6587\u7cfb\u7edf": "CJK System",
+    "\u4e2d\u6587\u624b\u5199(\u53ef\u9009)": "CJK Handwritten Optional",
+    "\u4e2d\u6587\u6807\u9898(\u53ef\u9009)": "CJK Display Optional",
 }
 PATTERN_ALIASES = {
-    "无": "None",
-    "圆点": "Dots",
-    "斜线": "Diagonal Lines",
-    "波纹": "Soft Waves",
-    "星光": "Tiny Stars",
-    "色块": "Gradient Blocks",
+    "\u65e0": "None",
+    "\u5706\u70b9": "Dots",
+    "\u659c\u7ebf": "Diagonal Lines",
+    "\u6ce2\u7eb9": "Soft Waves",
+    "\u661f\u5149": "Tiny Stars",
+    "\u8272\u5757": "Gradient Blocks",
 }
 
 
@@ -311,16 +311,16 @@ def _layout_from_preset(mode, preset, width, height, auto_adapt):
             chosen = "Signature Center"
 
     layouts = {
-        "Bottom Camera Bar": {"x": 50, "y": 91, "w": 86, "layout": "Text Only Bar"},
-        "Minimal Bottom Caption": {"x": 50, "y": 92, "w": 72, "layout": "Text Only Bar"},
-        "Center Transparent Text": {"x": 50, "y": 50, "w": 72, "layout": "Text Only"},
-        "Tiled Transparent Logo": {"x": 50, "y": 50, "w": 36, "layout": "Tiled"},
-        "Bottom Right Logo": {"x": 84, "y": 88, "w": 22, "layout": "Logo Only"},
-        "Logo Left + Text Right": {"x": 50, "y": 88, "w": 62, "layout": "Logo Left"},
-        "Soft Pattern Overlay": {"x": 50, "y": 50, "w": 100, "layout": "Pattern Only"},
-        "Signature Center": {"x": 50, "y": 58, "w": 54, "layout": "Text Only"},
+        "Bottom Camera Bar": {"x": 50, "y": 91, "w": 86, "h": 16, "layout": "Text Only Bar"},
+        "Minimal Bottom Caption": {"x": 50, "y": 92, "w": 72, "h": 14, "layout": "Text Only Bar"},
+        "Center Transparent Text": {"x": 50, "y": 50, "w": 72, "h": 18, "layout": "Text Only"},
+        "Tiled Transparent Logo": {"x": 50, "y": 50, "w": 36, "h": 36, "layout": "Tiled"},
+        "Bottom Right Logo": {"x": 84, "y": 88, "w": 22, "h": 16, "layout": "Logo Only"},
+        "Logo Left + Text Right": {"x": 50, "y": 88, "w": 62, "h": 16, "layout": "Logo Left"},
+        "Soft Pattern Overlay": {"x": 50, "y": 50, "w": 100, "h": 100, "layout": "Pattern Only"},
+        "Signature Center": {"x": 50, "y": 58, "w": 54, "h": 18, "layout": "Text Only"},
     }
-    return layouts.get(chosen, {"x": 50, "y": 88, "w": 55, "layout": "Text Only Bar"})
+    return layouts.get(chosen, {"x": 50, "y": 88, "w": 55, "h": 16, "layout": "Text Only Bar"})
 
 
 def _resolve_layout(layout_json, mode, preset, width, height, safe_margin, auto_adapt):
@@ -329,12 +329,13 @@ def _resolve_layout(layout_json, mode, preset, width, height, safe_margin, auto_
     layout = _layout_from_preset(mode, preset, width, height, auto_adapt)
     saved = _safe_json(layout_json)
     if saved:
-        layout.update({k: saved[k] for k in ("x", "y", "w", "layout") if k in saved})
+        layout.update({k: saved[k] for k in ("x", "y", "w", "h", "layout") if k in saved})
 
     margin = _clamp(float(safe_margin), 0.0, 25.0)
     layout["x"] = _clamp(float(layout.get("x", 50)), margin, 100.0 - margin)
     layout["y"] = _clamp(float(layout.get("y", 88)), margin, 100.0 - margin)
     layout["w"] = _clamp(float(layout.get("w", 55)), 2.0, 100.0 - margin * 2)
+    layout["h"] = _clamp(float(layout.get("h", 16)), 2.0, 100.0 - margin * 2)
     return layout
 
 
@@ -403,16 +404,27 @@ def _tile_logo(base, logo_image, target_width, opacity):
             base.alpha_composite(logo_image, (x, y))
 
 
-def _draw_pattern(base, pattern_type, seed, density, scale_min, scale_max, pattern_color, pattern_opacity):
+def _draw_pattern(base, pattern_type, seed, density, scale_min, scale_max, pattern_color, pattern_opacity, bounds=None):
     pattern_type = _canonical(pattern_type, PATTERN_ALIASES)
     if pattern_type == "None" or pattern_opacity <= 0:
+        return
+
+    if bounds:
+        x0, y0, x1, y1 = [int(v) for v in bounds]
+        x0 = max(0, min(base.width, x0))
+        y0 = max(0, min(base.height, y0))
+        x1 = max(x0 + 1, min(base.width, x1))
+        y1 = max(y0 + 1, min(base.height, y1))
+        target = Image.new("RGBA", (x1 - x0, y1 - y0), (0, 0, 0, 0))
+        _draw_pattern(target, pattern_type, seed, density, scale_min, scale_max, pattern_color, pattern_opacity)
+        base.alpha_composite(target, (x0, y0))
         return
 
     rng = random.Random(int(seed))
     layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
     color = _parse_color(pattern_color, (255, 255, 255)) + (_opacity(pattern_opacity),)
-    count = int(_clamp(density, 1, 100) * (base.width * base.height) / 180000)
+    count = max(1, int(_clamp(density, 1, 100) * (base.width * base.height) / 180000))
     min_size = max(2, int(scale_min))
     max_size = max(min_size, int(scale_max))
 
@@ -471,9 +483,9 @@ class FreeCameraWatermark:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "mode": (MODE_CHOICES, {"default": "相机白条", "tooltip": "选择水印类型。"}),
-                "preset": (PRESET_CHOICES, {"default": "自动", "tooltip": "推荐保持自动；也可选常用位置。"}),
-                "font_style": (FONT_STYLE_CHOICES, {"default": "默认", "tooltip": "文字字体风格。"}),
+                "mode": (MODE_CHOICES, {"default": "\u76f8\u673a\u767d\u6761", "tooltip": "\u9009\u62e9\u6c34\u5370\u7c7b\u578b\u3002"}),
+                "preset": (PRESET_CHOICES, {"default": "\u81ea\u52a8", "tooltip": "\u63a8\u8350\u4fdd\u6301\u81ea\u52a8\uff1b\u4e5f\u53ef\u9009\u5e38\u7528\u4f4d\u7f6e\u3002"}),
+                "font_style": (FONT_STYLE_CHOICES, {"default": "\u9ed8\u8ba4", "tooltip": "\u6587\u5b57\u5b57\u4f53\u98ce\u683c\u3002"}),
                 "layout_json": ("STRING", {"default": "{}", "multiline": True, "tooltip": "拖拽框保存的位置数据，通常不用改。"}),
                 "auto_adapt": ("BOOLEAN", {"default": True, "tooltip": "自动适配图片比例。"}),
                 "safe_margin": ("FLOAT", {"default": 3.0, "min": 0.0, "max": 25.0, "step": 0.5, "tooltip": "边缘安全距离。"}),
@@ -487,7 +499,7 @@ class FreeCameraWatermark:
                 "bar_opacity": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1, "tooltip": "白条透明度。"}),
                 "bar_height": ("INT", {"default": 90, "min": 0, "max": 1024, "step": 1, "tooltip": "白条高度。"}),
                 "logo_opacity": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1, "tooltip": "Logo透明度。"}),
-                "pattern_type": (PATTERN_TYPE_CHOICES, {"default": "无", "tooltip": "图案样式。"}),
+                "pattern_type": (PATTERN_TYPE_CHOICES, {"default": "\u65e0", "tooltip": "\u56fe\u6848\u6837\u5f0f\u3002"}),
                 "pattern_color": ("STRING", {"default": "#ffffff", "tooltip": "图案颜色。"}),
                 "pattern_opacity": ("INT", {"default": 32, "min": 0, "max": 255, "step": 1, "tooltip": "图案透明度，建议 16-48。"}),
                 "pattern_density": ("INT", {"default": 18, "min": 1, "max": 100, "step": 1, "tooltip": "图案数量。"}),
@@ -548,10 +560,17 @@ class FreeCameraWatermark:
             center_x = base.width * layout["x"] / 100.0
             center_y = base.height * layout["y"] / 100.0
             target_width = base.width * layout["w"] / 100.0
+            target_height = base.height * layout["h"] / 100.0
             logo_image = _prepare_logo(logo, logo_mask, index)
 
             if mode == "Pattern Watermark":
-                _draw_pattern(base, pattern_type, pattern_seed, pattern_density, pattern_scale_min, pattern_scale_max, pattern_color, pattern_opacity)
+                bounds = (
+                    center_x - target_width / 2,
+                    center_y - target_height / 2,
+                    center_x + target_width / 2,
+                    center_y + target_height / 2,
+                )
+                _draw_pattern(base, pattern_type, pattern_seed, pattern_density, pattern_scale_min, pattern_scale_max, pattern_color, pattern_opacity, bounds)
             elif mode == "Transparent Watermark":
                 if logo_image is not None and preset == "Tiled Transparent Logo":
                     _tile_logo(base, logo_image, target_width, logo_opacity)
@@ -605,7 +624,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "FreeCameraWatermark": "自由相机水印",
+    "FreeCameraWatermark": "\u81ea\u7531\u76f8\u673a\u6c34\u5370",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]

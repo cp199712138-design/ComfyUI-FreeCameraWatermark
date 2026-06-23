@@ -119,13 +119,14 @@ function readLayout(node) {
                 x: Number.isFinite(Number(parsed.x)) ? Number(parsed.x) : 50,
                 y: Number.isFinite(Number(parsed.y)) ? Number(parsed.y) : 88,
                 w: Number.isFinite(Number(parsed.w)) ? Number(parsed.w) : 55,
+                h: Number.isFinite(Number(parsed.h)) ? Number(parsed.h) : defaultLayoutHeight(node),
                 layout: typeof parsed.layout === "string" ? parsed.layout : defaultLayoutName(node),
             };
         }
     } catch {
         // Keep the node usable even if a user pasted invalid JSON.
     }
-    return { x: 50, y: 88, w: 55, layout: defaultLayoutName(node) };
+    return { x: 50, y: 88, w: 55, h: defaultLayoutHeight(node), layout: defaultLayoutName(node) };
 }
 
 function writeLayout(node, next) {
@@ -133,6 +134,7 @@ function writeLayout(node, next) {
         x: round(clamp(next.x, 0, 100)),
         y: round(clamp(next.y, 0, 100)),
         w: round(clamp(next.w, MIN_WIDTH, MAX_WIDTH)),
+        h: round(clamp(next.h ?? defaultLayoutHeight(node), MIN_WIDTH, MAX_WIDTH)),
         layout: next.layout || defaultLayoutName(node),
     };
     setWidgetValue(node, "layout_json", JSON.stringify(layout));
@@ -154,6 +156,16 @@ function defaultLayoutName(node) {
         return "Pattern Only";
     }
     return "Text Only Bar";
+}
+
+function defaultLayoutHeight(node) {
+    if (mode(node) === "Pattern Watermark") {
+        return 84;
+    }
+    if (mode(node) === "Logo") {
+        return 24;
+    }
+    return 18;
 }
 
 function hideLayoutJson(node) {
@@ -211,7 +223,7 @@ function applyCompactVisibility(node) {
     const textWidgets = ["font_style", "line_1", "line_2", "line_3", "font_size", "text_color", "text_opacity"];
     const barWidgets = ["bar_color", "bar_opacity", "bar_height"];
     const logoWidgets = ["logo_opacity"];
-    const patternWidgets = ["pattern_type", "pattern_color", "pattern_opacity", "pattern_density", "pattern_seed"];
+    const patternWidgets = ["pattern_type", "pattern_color", "pattern_opacity", "pattern_density"];
 
     const visible = new Set(["mode", "preset"]);
     if (modeName === "Text") {
@@ -287,15 +299,18 @@ function drawRoundRect(ctx, x, y, width, height, radius) {
 
 function targetBox(modeName, area, layout) {
     const width = clamp((layout.w / 100) * area.w, 18, area.w);
-    let height = width * 0.22;
+    let height = clamp(((layout.h ?? defaultLayoutHeight({ widgets: [{ name: "mode", value: modeName }] })) / 100) * area.h, 16, area.h);
 
-    if (modeName === "Logo") {
+    if (!Number.isFinite(height)) {
+        height = width * 0.22;
+    }
+    if (modeName === "Logo" && !layout.h) {
         height = width * 0.42;
-    } else if (modeName === "Logo + Text") {
+    } else if (modeName === "Logo + Text" && !layout.h) {
         height = width * 0.26;
-    } else if (modeName === "Transparent Watermark") {
+    } else if (modeName === "Transparent Watermark" && !layout.h) {
         height = width * 0.24;
-    } else if (modeName === "Pattern Watermark") {
+    } else if (modeName === "Pattern Watermark" && !layout.h) {
         height = area.h * 0.84;
     }
 
@@ -393,7 +408,7 @@ class WatermarkTransformWidget {
         ctx.font = "12px sans-serif";
         ctx.textAlign = "left";
         ctx.fillStyle = "#d1d5db";
-        ctx.fillText("拖动移动，右下角缩放", margin, headerY);
+        ctx.fillText("拖动移动，拉右下角缩放", margin, headerY);
 
         ctx.fillStyle = "#1f242c";
         drawRoundRect(ctx, area.x, area.y, area.w, area.h, 7);
@@ -435,7 +450,7 @@ class WatermarkTransformWidget {
         ctx.fillStyle = "#9ca3af";
         ctx.font = "10px sans-serif";
         ctx.textAlign = "right";
-        ctx.fillText(`位置 ${round(layout.x)}, ${round(layout.y)}  宽 ${round(layout.w)}%`, area.x + area.w, area.y + area.h + 15);
+        ctx.fillText(`位置 ${round(layout.x)}, ${round(layout.y)}  宽 ${round(layout.w)}% 高 ${round(layout.h)}%`, area.x + area.w, area.y + area.h + 15);
         ctx.restore();
     }
 
@@ -463,6 +478,7 @@ class WatermarkTransformWidget {
                 startX: x,
                 startY: y,
                 startW: readLayout(node).w,
+                startH: readLayout(node).h,
                 layout: readLayout(node),
                 centerX: box.x + box.w / 2,
                 centerY: box.y + box.h / 2,
@@ -477,7 +493,9 @@ class WatermarkTransformWidget {
                 current.y = ((y - area.y) / area.h) * 100;
             } else {
                 const widthFromCenter = Math.abs(x - this._drag.centerX) * 2;
+                const heightFromCenter = Math.abs(y - this._drag.centerY) * 2;
                 current.w = (widthFromCenter / area.w) * 100;
+                current.h = (heightFromCenter / area.h) * 100;
             }
             writeLayout(node, current);
             return true;
@@ -499,6 +517,15 @@ function addButton(node, name, callback) {
     node.addWidget("button", name, null, () => callback(node));
 }
 
+function randomizePattern(node) {
+    const choices = ["圆点", "斜线", "波纹", "星光", "色块"];
+    const current = String(widgetValue(node, "pattern_type", "无"));
+    if (current === "无" || current === "None") {
+        setWidgetValue(node, "pattern_type", choices[Math.floor(Math.random() * choices.length)]);
+    }
+    setWidgetValue(node, "pattern_seed", Math.floor(Math.random() * 2147483647));
+}
+
 function addTransformWidget(node) {
     if (node.widgets?.some((widget) => widget?.name === WIDGET_NAME)) {
         return;
@@ -514,8 +541,8 @@ function addTransformWidget(node) {
     addButton(node, "重置位置", (target) => setWidgetValue(target, "layout_json", "{}"));
     addButton(node, "居中", (target) => writeLayout(target, { ...readLayout(target), x: 50, y: 50 }));
     addButton(node, "底部", (target) => writeLayout(target, { ...readLayout(target), x: 50, y: 88 }));
-    addButton(node, "适配宽度", (target) => writeLayout(target, { ...readLayout(target), w: 78 }));
-    addButton(node, "随机图案", (target) => setWidgetValue(target, "pattern_seed", Math.floor(Math.random() * 2147483647)));
+    addButton(node, "适配宽度", (target) => writeLayout(target, { ...readLayout(target), w: 78, h: mode(target) === "Pattern Watermark" ? 84 : readLayout(target).h }));
+    addButton(node, "随机图案", randomizePattern);
     node.serialize_widgets = true;
 
     const width = Math.max(node.size?.[0] || 330, 380);
