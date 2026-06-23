@@ -48,6 +48,12 @@ const PATTERN_TO_CN = {
 };
 
 const MODE_TO_EN = Object.fromEntries(Object.entries(MODE_TO_CN).map(([key, value]) => [value, key]));
+const CN_CHOICES = {
+    mode: Object.values(MODE_TO_CN),
+    preset: Object.values(PRESET_TO_CN),
+    font_style: Object.values(FONT_TO_CN),
+    pattern_type: Object.values(PATTERN_TO_CN),
+};
 
 const LABELS = {
     mode: "模式",
@@ -238,6 +244,15 @@ function localizeWidgetValues(node) {
     migrateWidgetValue(node, "preset", PRESET_TO_CN);
     migrateWidgetValue(node, "font_style", FONT_TO_CN);
     migrateWidgetValue(node, "pattern_type", PATTERN_TO_CN);
+}
+
+function localizeComboChoices(node) {
+    for (const [name, values] of Object.entries(CN_CHOICES)) {
+        const widget = findWidget(node, name);
+        if (widget?.options?.values) {
+            widget.options.values = values;
+        }
+    }
 }
 
 function installModeCallback(node) {
@@ -491,6 +506,7 @@ function addTransformWidget(node) {
 
     hideLayoutJson(node);
     localizeWidgetValues(node);
+    localizeComboChoices(node);
     applyChineseLabels(node);
     installModeCallback(node);
     applyCompactVisibility(node);

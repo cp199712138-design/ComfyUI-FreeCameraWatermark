@@ -52,6 +52,48 @@ PATTERN_TYPES = [
     "色块",
 ]
 
+LEGACY_MODES = [
+    "Text",
+    "Logo + Text",
+    "Camera Bar",
+    "Transparent Watermark",
+    "Pattern Watermark",
+]
+LEGACY_PRESETS = [
+    "Auto",
+    "Bottom Camera Bar",
+    "Minimal Bottom Caption",
+    "Center Transparent Text",
+    "Tiled Transparent Logo",
+    "Bottom Right Logo",
+    "Logo Left + Text Right",
+    "Soft Pattern Overlay",
+    "Signature Center",
+    "Custom",
+]
+LEGACY_FONT_STYLES = [
+    "System Default",
+    "Signature",
+    "Editorial",
+    "Tech",
+    "CJK System",
+    "CJK Handwritten Optional",
+    "CJK Display Optional",
+]
+LEGACY_PATTERN_TYPES = [
+    "None",
+    "Dots",
+    "Diagonal Lines",
+    "Soft Waves",
+    "Tiny Stars",
+    "Gradient Blocks",
+]
+
+MODE_CHOICES = list(dict.fromkeys(MODES + LEGACY_MODES))
+PRESET_CHOICES = list(dict.fromkeys(PRESETS + LEGACY_PRESETS))
+FONT_STYLE_CHOICES = list(dict.fromkeys(FONT_STYLES + LEGACY_FONT_STYLES))
+PATTERN_TYPE_CHOICES = list(dict.fromkeys(PATTERN_TYPES + LEGACY_PATTERN_TYPES))
+
 MODE_ALIASES = {
     "文字": "Text",
     "Logo": "Logo",
@@ -429,9 +471,9 @@ class FreeCameraWatermark:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "mode": (MODES, {"default": "相机白条", "tooltip": "选择水印类型。"}),
-                "preset": (PRESETS, {"default": "自动", "tooltip": "推荐保持自动；也可选常用位置。"}),
-                "font_style": (FONT_STYLES, {"default": "默认", "tooltip": "文字字体风格。"}),
+                "mode": (MODE_CHOICES, {"default": "相机白条", "tooltip": "选择水印类型。"}),
+                "preset": (PRESET_CHOICES, {"default": "自动", "tooltip": "推荐保持自动；也可选常用位置。"}),
+                "font_style": (FONT_STYLE_CHOICES, {"default": "默认", "tooltip": "文字字体风格。"}),
                 "layout_json": ("STRING", {"default": "{}", "multiline": True, "tooltip": "拖拽框保存的位置数据，通常不用改。"}),
                 "auto_adapt": ("BOOLEAN", {"default": True, "tooltip": "自动适配图片比例。"}),
                 "safe_margin": ("FLOAT", {"default": 3.0, "min": 0.0, "max": 25.0, "step": 0.5, "tooltip": "边缘安全距离。"}),
@@ -445,7 +487,7 @@ class FreeCameraWatermark:
                 "bar_opacity": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1, "tooltip": "白条透明度。"}),
                 "bar_height": ("INT", {"default": 90, "min": 0, "max": 1024, "step": 1, "tooltip": "白条高度。"}),
                 "logo_opacity": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1, "tooltip": "Logo透明度。"}),
-                "pattern_type": (PATTERN_TYPES, {"default": "无", "tooltip": "图案样式。"}),
+                "pattern_type": (PATTERN_TYPE_CHOICES, {"default": "无", "tooltip": "图案样式。"}),
                 "pattern_color": ("STRING", {"default": "#ffffff", "tooltip": "图案颜色。"}),
                 "pattern_opacity": ("INT", {"default": 32, "min": 0, "max": 255, "step": 1, "tooltip": "图案透明度，建议 16-48。"}),
                 "pattern_density": ("INT", {"default": 18, "min": 1, "max": 100, "step": 1, "tooltip": "图案数量。"}),
