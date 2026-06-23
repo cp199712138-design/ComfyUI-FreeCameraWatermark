@@ -4,19 +4,34 @@ Lightweight ComfyUI node for camera-style watermarks, signatures, transparent lo
 
 No pip install. No comfy-env. No external runtime.
 
+## Download
+
+Use either method:
+
+1. Download the ready-to-use package:
+
+   ```text
+   dist/ComfyUI-FreeCameraWatermark.zip
+   ```
+
+2. Or download this repository with GitHub `Code > Download ZIP`.
+
 ## Install
 
-Copy this folder into:
+1. Close ComfyUI.
+2. Unzip the package.
+3. Put the whole folder here:
 
-```text
-ComfyUI/custom_nodes
-```
+   ```text
+   ComfyUI/custom_nodes/ComfyUI-FreeCameraWatermark
+   ```
 
-Restart ComfyUI, then search:
+4. Start ComfyUI.
+5. Search for:
 
-```text
-Free Camera Watermark
-```
+   ```text
+   Free Camera Watermark
+   ```
 
 ## Basic Use
 
