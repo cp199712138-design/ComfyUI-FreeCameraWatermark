@@ -6,6 +6,74 @@ const CONTROL_HEIGHT = 210;
 const MIN_WIDTH = 4;
 const MAX_WIDTH = 100;
 
+const MODE_TO_CN = {
+    Text: "文字",
+    Logo: "Logo",
+    "Logo + Text": "Logo+文字",
+    "Camera Bar": "相机白条",
+    "Transparent Watermark": "透明水印",
+    "Pattern Watermark": "图案水印",
+};
+
+const PRESET_TO_CN = {
+    Auto: "自动",
+    "Bottom Camera Bar": "底部白条",
+    "Minimal Bottom Caption": "底部小字",
+    "Center Transparent Text": "居中文字",
+    "Tiled Transparent Logo": "平铺Logo",
+    "Bottom Right Logo": "右下Logo",
+    "Logo Left + Text Right": "Logo左文字右",
+    "Soft Pattern Overlay": "柔和图案",
+    "Signature Center": "居中签名",
+    Custom: "自定义",
+};
+
+const FONT_TO_CN = {
+    "System Default": "默认",
+    Signature: "手写",
+    Editorial: "优雅",
+    Tech: "科技",
+    "CJK System": "中文系统",
+    "CJK Handwritten Optional": "中文手写(可选)",
+    "CJK Display Optional": "中文标题(可选)",
+};
+
+const PATTERN_TO_CN = {
+    None: "无",
+    Dots: "圆点",
+    "Diagonal Lines": "斜线",
+    "Soft Waves": "波纹",
+    "Tiny Stars": "星光",
+    "Gradient Blocks": "色块",
+};
+
+const MODE_TO_EN = Object.fromEntries(Object.entries(MODE_TO_CN).map(([key, value]) => [value, key]));
+
+const LABELS = {
+    mode: "模式",
+    preset: "位置预设",
+    font_style: "字体",
+    auto_adapt: "自动适配",
+    safe_margin: "安全边距",
+    line_1: "文字1",
+    line_2: "文字2",
+    line_3: "文字3",
+    font_size: "字号",
+    text_color: "文字颜色",
+    text_opacity: "文字透明度",
+    bar_color: "白条颜色",
+    bar_opacity: "白条透明度",
+    bar_height: "白条高度",
+    logo_opacity: "Logo透明度",
+    pattern_type: "图案",
+    pattern_color: "图案颜色",
+    pattern_opacity: "图案透明度",
+    pattern_density: "图案密度",
+    pattern_seed: "随机种子",
+    pattern_scale_min: "最小尺寸",
+    pattern_scale_max: "最大尺寸",
+};
+
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
@@ -65,7 +133,8 @@ function writeLayout(node, next) {
 }
 
 function mode(node) {
-    return String(widgetValue(node, "mode", "Camera Bar"));
+    const value = String(widgetValue(node, "mode", "相机白条"));
+    return MODE_TO_EN[value] || value;
 }
 
 function defaultLayoutName(node) {
@@ -91,6 +160,99 @@ function hideLayoutJson(node) {
     widget.type = "hidden";
     widget.computeSize = () => [0, -4];
     widget.serialize = true;
+}
+
+function setWidgetHidden(widget, hidden) {
+    if (!widget) {
+        return;
+    }
+
+    if (!widget._fcwOriginalComputeSize) {
+        widget._fcwOriginalComputeSize = widget.computeSize;
+    }
+    if (!widget._fcwOriginalType) {
+        widget._fcwOriginalType = widget.type;
+    }
+
+    widget.hidden = hidden;
+    widget.type = hidden ? "hidden" : widget._fcwOriginalType;
+    if (hidden) {
+        widget.computeSize = () => [0, -4];
+    } else if (widget._fcwOriginalComputeSize) {
+        widget.computeSize = widget._fcwOriginalComputeSize;
+    }
+}
+
+function migrateWidgetValue(node, name, mapping) {
+    const widget = findWidget(node, name);
+    if (!widget || !Object.hasOwn(mapping, widget.value)) {
+        return;
+    }
+    setWidgetValue(node, name, mapping[widget.value]);
+}
+
+function applyChineseLabels(node) {
+    for (const widget of node.widgets || []) {
+        if (LABELS[widget.name]) {
+            widget.label = LABELS[widget.name];
+        }
+    }
+}
+
+function applyCompactVisibility(node) {
+    const modeName = mode(node);
+    const alwaysHidden = ["layout_json", "auto_adapt", "safe_margin", "pattern_scale_min", "pattern_scale_max"];
+    const textWidgets = ["font_style", "line_1", "line_2", "line_3", "font_size", "text_color", "text_opacity"];
+    const barWidgets = ["bar_color", "bar_opacity", "bar_height"];
+    const logoWidgets = ["logo_opacity"];
+    const patternWidgets = ["pattern_type", "pattern_color", "pattern_opacity", "pattern_density", "pattern_seed"];
+
+    const visible = new Set(["mode", "preset"]);
+    if (modeName === "Text") {
+        textWidgets.forEach((name) => visible.add(name));
+    } else if (modeName === "Camera Bar") {
+        textWidgets.concat(barWidgets).forEach((name) => visible.add(name));
+    } else if (modeName === "Logo") {
+        logoWidgets.forEach((name) => visible.add(name));
+    } else if (modeName === "Logo + Text") {
+        textWidgets.concat(logoWidgets).forEach((name) => visible.add(name));
+    } else if (modeName === "Transparent Watermark") {
+        textWidgets.concat(logoWidgets).forEach((name) => visible.add(name));
+    } else if (modeName === "Pattern Watermark") {
+        patternWidgets.forEach((name) => visible.add(name));
+    }
+
+    for (const widget of node.widgets || []) {
+        if (!widget?.name || widget.name === WIDGET_NAME || widget.type === "button") {
+            continue;
+        }
+        setWidgetHidden(widget, alwaysHidden.includes(widget.name) || !visible.has(widget.name));
+    }
+
+    node.setDirtyCanvas?.(true, true);
+    node.graph?.setDirtyCanvas?.(true, true);
+}
+
+function localizeWidgetValues(node) {
+    migrateWidgetValue(node, "mode", MODE_TO_CN);
+    migrateWidgetValue(node, "preset", PRESET_TO_CN);
+    migrateWidgetValue(node, "font_style", FONT_TO_CN);
+    migrateWidgetValue(node, "pattern_type", PATTERN_TO_CN);
+}
+
+function installModeCallback(node) {
+    const widget = findWidget(node, "mode");
+    if (!widget || widget._fcwModeCallbackInstalled) {
+        return;
+    }
+
+    const originalCallback = widget.callback;
+    widget.callback = (value, canvas, targetNode, pos, event) => {
+        const result = originalCallback?.(value, canvas, targetNode, pos, event);
+        applyCompactVisibility(node);
+        return result;
+    };
+    widget._fcwModeCallbackInstalled = true;
 }
 
 function drawRoundRect(ctx, x, y, width, height, radius) {
@@ -216,7 +378,7 @@ class WatermarkTransformWidget {
         ctx.font = "12px sans-serif";
         ctx.textAlign = "left";
         ctx.fillStyle = "#d1d5db";
-        ctx.fillText("Drag to move. Drag the corner to resize.", margin, headerY);
+        ctx.fillText("拖动移动，右下角缩放", margin, headerY);
 
         ctx.fillStyle = "#1f242c";
         drawRoundRect(ctx, area.x, area.y, area.w, area.h, 7);
@@ -258,7 +420,7 @@ class WatermarkTransformWidget {
         ctx.fillStyle = "#9ca3af";
         ctx.font = "10px sans-serif";
         ctx.textAlign = "right";
-        ctx.fillText(`x ${round(layout.x)}  y ${round(layout.y)}  width ${round(layout.w)}%`, area.x + area.w, area.y + area.h + 15);
+        ctx.fillText(`位置 ${round(layout.x)}, ${round(layout.y)}  宽 ${round(layout.w)}%`, area.x + area.w, area.y + area.h + 15);
         ctx.restore();
     }
 
@@ -328,12 +490,16 @@ function addTransformWidget(node) {
     }
 
     hideLayoutJson(node);
+    localizeWidgetValues(node);
+    applyChineseLabels(node);
+    installModeCallback(node);
+    applyCompactVisibility(node);
     node.addCustomWidget(new WatermarkTransformWidget());
-    addButton(node, "Reset Layout", (target) => setWidgetValue(target, "layout_json", "{}"));
-    addButton(node, "Center", (target) => writeLayout(target, { ...readLayout(target), x: 50, y: 50 }));
-    addButton(node, "Bottom", (target) => writeLayout(target, { ...readLayout(target), x: 50, y: 88 }));
-    addButton(node, "Fit Width", (target) => writeLayout(target, { ...readLayout(target), w: 78 }));
-    addButton(node, "Random Pattern", (target) => setWidgetValue(target, "pattern_seed", Math.floor(Math.random() * 2147483647)));
+    addButton(node, "重置位置", (target) => setWidgetValue(target, "layout_json", "{}"));
+    addButton(node, "居中", (target) => writeLayout(target, { ...readLayout(target), x: 50, y: 50 }));
+    addButton(node, "底部", (target) => writeLayout(target, { ...readLayout(target), x: 50, y: 88 }));
+    addButton(node, "适配宽度", (target) => writeLayout(target, { ...readLayout(target), w: 78 }));
+    addButton(node, "随机图案", (target) => setWidgetValue(target, "pattern_seed", Math.floor(Math.random() * 2147483647)));
     node.serialize_widgets = true;
 
     const width = Math.max(node.size?.[0] || 330, 380);

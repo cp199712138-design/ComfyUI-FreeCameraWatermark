@@ -1,126 +1,57 @@
 # ComfyUI-FreeCameraWatermark
 
-Lightweight ComfyUI node for camera-style watermarks, signatures, transparent logos, and simple decorative patterns.
+轻量相机水印节点。支持文字、Logo、相机白条、透明水印和简单图案。
 
-No pip install. No comfy-env. No external runtime.
+不需要 pip，不需要 comfy-env。
 
-## Download
+## 安装
 
-Use either method:
-
-1. Download the ready-to-use package:
-
-   ```text
-   dist/ComfyUI-FreeCameraWatermark.zip
-   ```
-
-2. Or download this repository with GitHub `Code > Download ZIP`.
-
-## Install
-
-1. Close ComfyUI.
-2. Unzip the package.
-3. Put the whole folder here:
-
-   ```text
-   ComfyUI/custom_nodes/ComfyUI-FreeCameraWatermark
-   ```
-
-4. Start ComfyUI.
-5. Search for:
-
-   ```text
-   Free Camera Watermark
-   ```
-
-## Basic Use
-
-Connect your main image to `image`.
-
-Choose `mode`:
-
-- `Text`: draw 1-3 text lines.
-- `Logo`: draw only the connected logo/signature image.
-- `Logo + Text`: draw a logo and text together.
-- `Camera Bar`: draw text on a camera-style bottom bar.
-- `Transparent Watermark`: draw a low-opacity logo or text watermark.
-- `Pattern Watermark`: draw a lightweight generated pattern.
-
-For a logo or signature, connect `logo`. If the logo comes from ComfyUI `Load Image`, connect its `mask` output to `logo_mask` for transparency.
-
-## Transform Box
-
-The node has a small transform box inside the node UI:
-
-- Drag the box to move the watermark.
-- Drag the bottom-right corner to resize it.
-- `Reset Layout` returns to automatic layout.
-- `Center`, `Bottom`, and `Fit Width` are quick layout helpers.
-- `Random Pattern` changes only the pattern seed.
-
-The transform box saves its values in hidden `layout_json`, so workflows keep the position and size without showing extra numeric controls.
-
-## Presets
-
-- `Auto`: chooses a sensible layout from image shape and mode.
-- `Bottom Camera Bar`: classic bottom white bar.
-- `Minimal Bottom Caption`: smaller bottom caption.
-- `Center Transparent Text`: centered transparent text.
-- `Tiled Transparent Logo`: repeated transparent logo.
-- `Bottom Right Logo`: small logo near the lower-right.
-- `Logo Left + Text Right`: compact logo and text block.
-- `Soft Pattern Overlay`: full-image light pattern.
-- `Signature Center`: signature-like centered text.
-- `Custom`: keeps the transform box layout.
-
-## Fonts
-
-Bundled lightweight fonts:
-
-- `Signature`: Caveat, good for handwritten signatures.
-- `Editorial`: Playfair Display, good for elegant camera-card text.
-- `Tech`: Orbitron, good for digital/camera UI style.
-- `System Default`: uses installed system fonts.
-- `CJK System`: tries common Windows Chinese fonts.
-
-Optional Chinese display fonts can be placed in `optional_fonts`:
-
-- `LXGWWenKai-Regular.ttf` for `CJK Handwritten Optional`.
-- `SmileySans-Oblique.ttf` for `CJK Display Optional`.
-
-The node will fall back to system fonts if optional files are not present.
-
-## Color And Opacity
-
-Colors use hex strings such as:
+下载：
 
 ```text
-#ffffff
-#000000
-#88ccff
+dist/ComfyUI-FreeCameraWatermark.zip
 ```
 
-Opacity values use `0-255`:
+解压后，把整个文件夹放到：
 
-- `0`: invisible.
-- `32`: very light transparent watermark.
-- `128`: half transparent.
-- `255`: fully opaque.
+```text
+ComfyUI/custom_nodes/ComfyUI-FreeCameraWatermark
+```
 
-## Patterns
+重启 ComfyUI，搜索：
 
-`Pattern Watermark` is generated locally with PIL. It does not download images.
+```text
+自由相机水印
+```
 
-Pattern types:
+也可以搜索英文：
 
-- `Dots`
-- `Diagonal Lines`
-- `Soft Waves`
-- `Tiny Stars`
-- `Gradient Blocks`
+```text
+Free Camera Watermark
+```
 
-`pattern_density` controls how many marks appear. `pattern_scale_min` and `pattern_scale_max` control the size range. `pattern_seed` makes the result repeatable.
+## 怎么用
 
-## Notes
+1. 连接主图到 `image`。
+2. 如果用签名或 Logo，连接图片到 `logo`，透明通道连接到 `logo_mask`。
+3. 选择 `模式`。
+4. 在节点里的蓝色框上拖动位置，拉右下角缩放。
 
-This node composites pixels into the output image. It does not remove metadata, upload files, or edit source images.
+常用模式：
+
+- `相机白条`：底部白条加相机参数。
+- `Logo`：只添加签名或 Logo。
+- `Logo+文字`：Logo 和文字一起放。
+- `透明水印`：低透明度水印。
+- `图案水印`：生成简单装饰图案，不联网下载。
+
+## 小提示
+
+- `自动` 位置一般不用改。
+- `透明度`：0 是看不见，255 是不透明。
+- 颜色写法：`#ffffff`、`#000000`。
+- 字体选 `默认` 最稳；`手写 / 优雅 / 科技` 是内置字体。
+
+## 说明
+
+这个节点只把水印合成到图片像素里，不上传文件，也不清理图片元数据。

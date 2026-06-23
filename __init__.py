@@ -15,42 +15,84 @@ FONTS_DIR = os.path.join(ROOT_DIR, "fonts")
 OPTIONAL_FONTS_DIR = os.path.join(ROOT_DIR, "optional_fonts")
 
 MODES = [
-    "Text",
+    "文字",
     "Logo",
-    "Logo + Text",
-    "Camera Bar",
-    "Transparent Watermark",
-    "Pattern Watermark",
+    "Logo+文字",
+    "相机白条",
+    "透明水印",
+    "图案水印",
 ]
 PRESETS = [
-    "Auto",
-    "Bottom Camera Bar",
-    "Minimal Bottom Caption",
-    "Center Transparent Text",
-    "Tiled Transparent Logo",
-    "Bottom Right Logo",
-    "Logo Left + Text Right",
-    "Soft Pattern Overlay",
-    "Signature Center",
-    "Custom",
+    "自动",
+    "底部白条",
+    "底部小字",
+    "居中文字",
+    "平铺Logo",
+    "右下Logo",
+    "Logo左文字右",
+    "柔和图案",
+    "居中签名",
+    "自定义",
 ]
 FONT_STYLES = [
-    "System Default",
-    "Signature",
-    "Editorial",
-    "Tech",
-    "CJK System",
-    "CJK Handwritten Optional",
-    "CJK Display Optional",
+    "默认",
+    "手写",
+    "优雅",
+    "科技",
+    "中文系统",
+    "中文手写(可选)",
+    "中文标题(可选)",
 ]
 PATTERN_TYPES = [
-    "None",
-    "Dots",
-    "Diagonal Lines",
-    "Soft Waves",
-    "Tiny Stars",
-    "Gradient Blocks",
+    "无",
+    "圆点",
+    "斜线",
+    "波纹",
+    "星光",
+    "色块",
 ]
+
+MODE_ALIASES = {
+    "文字": "Text",
+    "Logo": "Logo",
+    "Logo+文字": "Logo + Text",
+    "相机白条": "Camera Bar",
+    "透明水印": "Transparent Watermark",
+    "图案水印": "Pattern Watermark",
+}
+PRESET_ALIASES = {
+    "自动": "Auto",
+    "底部白条": "Bottom Camera Bar",
+    "底部小字": "Minimal Bottom Caption",
+    "居中文字": "Center Transparent Text",
+    "平铺Logo": "Tiled Transparent Logo",
+    "右下Logo": "Bottom Right Logo",
+    "Logo左文字右": "Logo Left + Text Right",
+    "柔和图案": "Soft Pattern Overlay",
+    "居中签名": "Signature Center",
+    "自定义": "Custom",
+}
+FONT_ALIASES = {
+    "默认": "System Default",
+    "手写": "Signature",
+    "优雅": "Editorial",
+    "科技": "Tech",
+    "中文系统": "CJK System",
+    "中文手写(可选)": "CJK Handwritten Optional",
+    "中文标题(可选)": "CJK Display Optional",
+}
+PATTERN_ALIASES = {
+    "无": "None",
+    "圆点": "Dots",
+    "斜线": "Diagonal Lines",
+    "波纹": "Soft Waves",
+    "星光": "Tiny Stars",
+    "色块": "Gradient Blocks",
+}
+
+
+def _canonical(value, aliases):
+    return aliases.get(value, value)
 
 
 def _tensor_to_pil(image):
@@ -153,6 +195,7 @@ def _text_block_size(draw, lines, font, line_spacing):
 
 
 def _font_candidates(font_style):
+    font_style = _canonical(font_style, FONT_ALIASES)
     fonts = []
     if font_style == "Signature":
         fonts.append(os.path.join(FONTS_DIR, "Caveat-Regular.ttf"))
@@ -205,6 +248,8 @@ def _load_font(font_style, size):
 
 
 def _layout_from_preset(mode, preset, width, height, auto_adapt):
+    mode = _canonical(mode, MODE_ALIASES)
+    preset = _canonical(preset, PRESET_ALIASES)
     aspect = width / max(1, height)
     chosen = preset
     if preset == "Auto" and auto_adapt:
@@ -237,6 +282,8 @@ def _layout_from_preset(mode, preset, width, height, auto_adapt):
 
 
 def _resolve_layout(layout_json, mode, preset, width, height, safe_margin, auto_adapt):
+    mode = _canonical(mode, MODE_ALIASES)
+    preset = _canonical(preset, PRESET_ALIASES)
     layout = _layout_from_preset(mode, preset, width, height, auto_adapt)
     saved = _safe_json(layout_json)
     if saved:
@@ -315,6 +362,7 @@ def _tile_logo(base, logo_image, target_width, opacity):
 
 
 def _draw_pattern(base, pattern_type, seed, density, scale_min, scale_max, pattern_color, pattern_opacity):
+    pattern_type = _canonical(pattern_type, PATTERN_ALIASES)
     if pattern_type == "None" or pattern_opacity <= 0:
         return
 
@@ -381,29 +429,29 @@ class FreeCameraWatermark:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "mode": (MODES, {"default": "Camera Bar", "tooltip": "Choose text, logo, camera bar, transparent watermark, or generated pattern."}),
-                "preset": (PRESETS, {"default": "Auto", "tooltip": "Auto picks a sensible layout. Custom keeps the transform box layout."}),
-                "font_style": (FONT_STYLES, {"default": "System Default", "tooltip": "Bundled styles: Signature, Editorial, Tech. CJK optional styles use optional_fonts if present."}),
-                "layout_json": ("STRING", {"default": "{}", "multiline": True, "tooltip": "Hidden transform data written by the drag box."}),
-                "auto_adapt": ("BOOLEAN", {"default": True, "tooltip": "Adjust the default layout based on mode and image shape."}),
-                "safe_margin": ("FLOAT", {"default": 3.0, "min": 0.0, "max": 25.0, "step": 0.5, "tooltip": "Minimum edge margin in percent for the transform center."}),
+                "mode": (MODES, {"default": "相机白条", "tooltip": "选择水印类型。"}),
+                "preset": (PRESETS, {"default": "自动", "tooltip": "推荐保持自动；也可选常用位置。"}),
+                "font_style": (FONT_STYLES, {"default": "默认", "tooltip": "文字字体风格。"}),
+                "layout_json": ("STRING", {"default": "{}", "multiline": True, "tooltip": "拖拽框保存的位置数据，通常不用改。"}),
+                "auto_adapt": ("BOOLEAN", {"default": True, "tooltip": "自动适配图片比例。"}),
+                "safe_margin": ("FLOAT", {"default": 3.0, "min": 0.0, "max": 25.0, "step": 0.5, "tooltip": "边缘安全距离。"}),
                 "line_1": ("STRING", {"default": "iPhone 18 SuperPro Max"}),
                 "line_2": ("STRING", {"default": "Main Camera"}),
                 "line_3": ("STRING", {"default": "24mm | f/1.8 | 1/125s | ISO 50"}),
-                "font_size": ("INT", {"default": 28, "min": 6, "max": 256, "step": 1, "tooltip": "Base text size. The transform box can auto-fit text to the selected width."}),
-                "text_color": ("STRING", {"default": "#000000", "tooltip": "Text color, for example #000000 or #ffffff."}),
-                "text_opacity": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1, "tooltip": "0 is invisible, 128 is half transparent, 255 is fully opaque."}),
-                "bar_color": ("STRING", {"default": "#ffffff", "tooltip": "Camera bar color, for example #ffffff."}),
-                "bar_opacity": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1, "tooltip": "0 hides the bar, 255 makes it solid."}),
-                "bar_height": ("INT", {"default": 90, "min": 0, "max": 1024, "step": 1, "tooltip": "Base bar height in pixels. Set to 0 to hide the bar."}),
-                "logo_opacity": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1, "tooltip": "Logo transparency: 0 invisible, 255 opaque."}),
-                "pattern_type": (PATTERN_TYPES, {"default": "None", "tooltip": "Lightweight local pattern drawn with PIL. No downloads."}),
-                "pattern_color": ("STRING", {"default": "#ffffff", "tooltip": "Pattern color, for example #ffffff."}),
-                "pattern_opacity": ("INT", {"default": 32, "min": 0, "max": 255, "step": 1, "tooltip": "Use low values like 16-48 for subtle transparent watermarks."}),
-                "pattern_density": ("INT", {"default": 18, "min": 1, "max": 100, "step": 1, "tooltip": "Higher values draw more marks."}),
-                "pattern_seed": ("INT", {"default": 20260623, "min": 0, "max": 2147483647, "step": 1, "tooltip": "Same seed repeats the same generated pattern."}),
-                "pattern_scale_min": ("INT", {"default": 6, "min": 1, "max": 512, "step": 1, "tooltip": "Smallest generated pattern element size."}),
-                "pattern_scale_max": ("INT", {"default": 22, "min": 1, "max": 1024, "step": 1, "tooltip": "Largest generated pattern element size."}),
+                "font_size": ("INT", {"default": 28, "min": 6, "max": 256, "step": 1, "tooltip": "文字大小。"}),
+                "text_color": ("STRING", {"default": "#000000", "tooltip": "文字颜色，如 #000000。"}),
+                "text_opacity": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1, "tooltip": "文字透明度：0透明，255不透明。"}),
+                "bar_color": ("STRING", {"default": "#ffffff", "tooltip": "白条颜色。"}),
+                "bar_opacity": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1, "tooltip": "白条透明度。"}),
+                "bar_height": ("INT", {"default": 90, "min": 0, "max": 1024, "step": 1, "tooltip": "白条高度。"}),
+                "logo_opacity": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1, "tooltip": "Logo透明度。"}),
+                "pattern_type": (PATTERN_TYPES, {"default": "无", "tooltip": "图案样式。"}),
+                "pattern_color": ("STRING", {"default": "#ffffff", "tooltip": "图案颜色。"}),
+                "pattern_opacity": ("INT", {"default": 32, "min": 0, "max": 255, "step": 1, "tooltip": "图案透明度，建议 16-48。"}),
+                "pattern_density": ("INT", {"default": 18, "min": 1, "max": 100, "step": 1, "tooltip": "图案数量。"}),
+                "pattern_seed": ("INT", {"default": 20260623, "min": 0, "max": 2147483647, "step": 1, "tooltip": "随机种子。"}),
+                "pattern_scale_min": ("INT", {"default": 6, "min": 1, "max": 512, "step": 1, "tooltip": "图案最小尺寸。"}),
+                "pattern_scale_max": ("INT", {"default": 22, "min": 1, "max": 1024, "step": 1, "tooltip": "图案最大尺寸。"}),
             },
             "optional": {
                 "logo": ("IMAGE",),
@@ -415,7 +463,7 @@ class FreeCameraWatermark:
     RETURN_NAMES = ("image",)
     FUNCTION = "apply_watermark"
     CATEGORY = "image/watermark"
-    DESCRIPTION = "Lightweight draggable watermark node with text, logo, transparency, fonts, and procedural patterns."
+    DESCRIPTION = "轻量相机水印：文字、Logo、透明水印和图案。"
 
     def apply_watermark(
         self,
@@ -446,6 +494,10 @@ class FreeCameraWatermark:
         logo=None,
         logo_mask=None,
     ):
+        mode = _canonical(mode, MODE_ALIASES)
+        preset = _canonical(preset, PRESET_ALIASES)
+        font_style = _canonical(font_style, FONT_ALIASES)
+        pattern_type = _canonical(pattern_type, PATTERN_ALIASES)
         output_images = []
 
         for index in range(image.shape[0]):
@@ -511,7 +563,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "FreeCameraWatermark": "Free Camera Watermark",
+    "FreeCameraWatermark": "自由相机水印",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS", "WEB_DIRECTORY"]
