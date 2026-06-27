@@ -210,6 +210,19 @@ def _opacity(value):
     return int(_clamp(float(value), 0, 255))
 
 
+def _ui_opacity(value):
+    value = float(value)
+    if value <= 100:
+        value *= 2.55
+    return _opacity(value)
+
+
+def _contrast_hex(color):
+    red, green, blue = _parse_color(color, (255, 255, 255))
+    luminance = 0.299 * red + 0.587 * green + 0.114 * blue
+    return "#000000" if luminance > 150 else "#ffffff"
+
+
 def _safe_json(value):
     if not value:
         return {}
@@ -484,24 +497,24 @@ class FreeCameraWatermark:
             "required": {
                 "image": ("IMAGE",),
                 "mode": (MODE_CHOICES, {"default": "\u76f8\u673a\u767d\u6761", "tooltip": "\u9009\u62e9\u6c34\u5370\u7c7b\u578b\u3002"}),
-                "preset": (PRESET_CHOICES, {"default": "\u81ea\u52a8", "tooltip": "\u63a8\u8350\u4fdd\u6301\u81ea\u52a8\uff1b\u4e5f\u53ef\u9009\u5e38\u7528\u4f4d\u7f6e\u3002"}),
+                "preset": (PRESET_CHOICES, {"default": "\u81ea\u5b9a\u4e49", "tooltip": "\u517c\u5bb9\u65e7\u5de5\u4f5c\u6d41\uff0c\u65b0\u7248\u754c\u9762\u4f1a\u9690\u85cf\u5b83\u3002"}),
                 "font_style": (FONT_STYLE_CHOICES, {"default": "\u9ed8\u8ba4", "tooltip": "\u6587\u5b57\u5b57\u4f53\u98ce\u683c\u3002"}),
                 "layout_json": ("STRING", {"default": "{}", "multiline": True, "tooltip": "拖拽框保存的位置数据，通常不用改。"}),
-                "auto_adapt": ("BOOLEAN", {"default": True, "tooltip": "自动适配图片比例。"}),
-                "safe_margin": ("FLOAT", {"default": 3.0, "min": 0.0, "max": 25.0, "step": 0.5, "tooltip": "边缘安全距离。"}),
+                "auto_adapt": ("BOOLEAN", {"default": True, "tooltip": "兼容旧工作流，新版使用拖拽画布自定义。"}),
+                "safe_margin": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 25.0, "step": 0.5, "tooltip": "兼容旧工作流。"}),
                 "line_1": ("STRING", {"default": "iPhone 18 SuperPro Max"}),
                 "line_2": ("STRING", {"default": "Main Camera"}),
                 "line_3": ("STRING", {"default": "24mm | f/1.8 | 1/125s | ISO 50"}),
                 "font_size": ("INT", {"default": 28, "min": 6, "max": 256, "step": 1, "tooltip": "文字大小。"}),
-                "text_color": ("STRING", {"default": "#000000", "tooltip": "文字颜色，如 #000000。"}),
-                "text_opacity": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1, "tooltip": "文字透明度：0透明，255不透明。"}),
-                "bar_color": ("STRING", {"default": "#ffffff", "tooltip": "白条颜色。"}),
-                "bar_opacity": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1, "tooltip": "白条透明度。"}),
-                "bar_height": ("INT", {"default": 90, "min": 0, "max": 1024, "step": 1, "tooltip": "白条高度。"}),
-                "logo_opacity": ("INT", {"default": 255, "min": 0, "max": 255, "step": 1, "tooltip": "Logo透明度。"}),
+                "text_color": ("STRING", {"default": "#ffffff", "tooltip": "主颜色：用于文字、白条、透明水印和图案。"}),
+                "text_opacity": ("INT", {"default": 100, "min": 0, "max": 100, "step": 1, "tooltip": "透明度：0 看不见，100 不透明。"}),
+                "bar_color": ("STRING", {"default": "#ffffff", "tooltip": "兼容旧工作流，新版改用主颜色。"}),
+                "bar_opacity": ("INT", {"default": 100, "min": 0, "max": 255, "step": 1, "tooltip": "兼容旧工作流，新版改用透明度。"}),
+                "bar_height": ("INT", {"default": 90, "min": 0, "max": 1024, "step": 1, "tooltip": "兼容旧工作流，新版用拖拽框高度控制。"}),
+                "logo_opacity": ("INT", {"default": 100, "min": 0, "max": 255, "step": 1, "tooltip": "兼容旧工作流，新版改用统一透明度。"}),
                 "pattern_type": (PATTERN_TYPE_CHOICES, {"default": "\u65e0", "tooltip": "\u56fe\u6848\u6837\u5f0f\u3002"}),
-                "pattern_color": ("STRING", {"default": "#ffffff", "tooltip": "图案颜色。"}),
-                "pattern_opacity": ("INT", {"default": 32, "min": 0, "max": 255, "step": 1, "tooltip": "图案透明度，建议 16-48。"}),
+                "pattern_color": ("STRING", {"default": "#ffffff", "tooltip": "兼容旧工作流，新版改用主颜色。"}),
+                "pattern_opacity": ("INT", {"default": 32, "min": 0, "max": 255, "step": 1, "tooltip": "兼容旧工作流，新版改用透明度。"}),
                 "pattern_density": ("INT", {"default": 18, "min": 1, "max": 100, "step": 1, "tooltip": "图案数量。"}),
                 "pattern_seed": ("INT", {"default": 20260623, "min": 0, "max": 2147483647, "step": 1, "tooltip": "随机种子。"}),
                 "pattern_scale_min": ("INT", {"default": 6, "min": 1, "max": 512, "step": 1, "tooltip": "图案最小尺寸。"}),
@@ -552,6 +565,8 @@ class FreeCameraWatermark:
         preset = _canonical(preset, PRESET_ALIASES)
         font_style = _canonical(font_style, FONT_ALIASES)
         pattern_type = _canonical(pattern_type, PATTERN_ALIASES)
+        main_color = text_color
+        main_opacity = _ui_opacity(text_opacity)
         output_images = []
 
         for index in range(image.shape[0]):
@@ -564,29 +579,32 @@ class FreeCameraWatermark:
             logo_image = _prepare_logo(logo, logo_mask, index)
 
             if mode == "Pattern Watermark":
+                active_pattern_type = "Dots" if pattern_type == "None" else pattern_type
                 bounds = (
                     center_x - target_width / 2,
                     center_y - target_height / 2,
                     center_x + target_width / 2,
                     center_y + target_height / 2,
                 )
-                _draw_pattern(base, pattern_type, pattern_seed, pattern_density, pattern_scale_min, pattern_scale_max, pattern_color, pattern_opacity, bounds)
+                _draw_pattern(base, active_pattern_type, pattern_seed, pattern_density, pattern_scale_min, pattern_scale_max, main_color, main_opacity, bounds)
             elif mode == "Transparent Watermark":
                 if logo_image is not None and preset == "Tiled Transparent Logo":
-                    _tile_logo(base, logo_image, target_width, logo_opacity)
+                    _tile_logo(base, logo_image, target_width, main_opacity)
                 elif logo_image is not None:
-                    _draw_logo(base, logo_image, center_x, center_y, target_width, logo_opacity)
+                    _draw_logo(base, logo_image, center_x, center_y, target_width, main_opacity)
                 else:
-                    _draw_text_block(base, [line_1, line_2, line_3], center_x, center_y, target_width, font_style, font_size, text_color, text_opacity)
+                    _draw_text_block(base, [line_1, line_2, line_3], center_x, center_y, target_width, font_style, font_size, main_color, main_opacity)
             elif mode == "Logo" and logo_image is not None:
-                _draw_logo(base, logo_image, center_x, center_y, target_width, logo_opacity)
+                _draw_logo(base, logo_image, center_x, center_y, target_width, main_opacity)
             elif mode == "Logo + Text":
-                self._render_logo_text(base, logo_image, center_x, center_y, target_width, layout.get("layout", "Logo Left"), [line_1, line_2, line_3], font_style, font_size, text_color, text_opacity, logo_opacity)
+                self._render_logo_text(base, logo_image, center_x, center_y, target_width, layout.get("layout", "Logo Left"), [line_1, line_2, line_3], font_style, font_size, main_color, main_opacity, main_opacity)
             elif mode in ("Text", "Camera Bar"):
-                scaled_bar_height = int(bar_height * (target_width / max(1, base.width * 0.55)))
                 if mode == "Camera Bar":
-                    _draw_bar(base, center_y, scaled_bar_height, bar_color, bar_opacity)
-                _draw_text_block(base, [line_1, line_2, line_3], center_x, center_y, target_width, font_style, font_size, text_color, text_opacity)
+                    _draw_bar(base, center_y, target_height, main_color, main_opacity)
+                    text_draw_color = _contrast_hex(main_color)
+                else:
+                    text_draw_color = main_color
+                _draw_text_block(base, [line_1, line_2, line_3], center_x, center_y, target_width, font_style, font_size, text_draw_color, main_opacity)
 
             output_images.append(_pil_to_tensor(base))
 

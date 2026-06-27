@@ -1,10 +1,11 @@
 import { app } from "/scripts/app.js";
 
 const NODE_NAME = "FreeCameraWatermark";
-const WIDGET_NAME = "watermark_transform";
-const CONTROL_HEIGHT = 210;
-const MIN_WIDTH = 4;
-const MAX_WIDTH = 100;
+const TRANSFORM_WIDGET = "watermark_transform";
+const PALETTE_WIDGET = "watermark_palette";
+const MIN_BOX = 4;
+const CONTROL_HEIGHT = 230;
+const PALETTE_HEIGHT = 34;
 
 const MODE_TO_CN = {
     Text: "文字",
@@ -59,26 +60,36 @@ const LABELS = {
     mode: "模式",
     preset: "位置预设",
     font_style: "字体",
+    layout_json: "拖拽位置",
     auto_adapt: "自动适配",
     safe_margin: "安全边距",
     line_1: "文字1",
     line_2: "文字2",
     line_3: "文字3",
     font_size: "字号",
-    text_color: "文字颜色",
-    text_opacity: "文字透明度",
-    bar_color: "白条颜色",
-    bar_opacity: "白条透明度",
-    bar_height: "白条高度",
-    logo_opacity: "Logo透明度",
+    text_color: "主颜色",
+    text_opacity: "透明度",
+    bar_color: "旧版白条颜色",
+    bar_opacity: "旧版白条透明度",
+    bar_height: "旧版白条高度",
+    logo_opacity: "旧版Logo透明度",
     pattern_type: "图案",
-    pattern_color: "图案颜色",
-    pattern_opacity: "图案透明度",
+    pattern_color: "旧版图案颜色",
+    pattern_opacity: "旧版图案透明度",
     pattern_density: "图案密度",
     pattern_seed: "随机种子",
     pattern_scale_min: "最小尺寸",
     pattern_scale_max: "最大尺寸",
 };
+
+const COLOR_SWATCHES = [
+    ["白", "#ffffff"],
+    ["黑", "#000000"],
+    ["灰", "#888888"],
+    ["金", "#d9a441"],
+    ["红", "#e53935"],
+    ["蓝", "#3b82f6"],
+];
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -103,41 +114,10 @@ function setWidgetValue(node, name, value) {
     if (!widget) {
         return;
     }
-
     widget.value = value;
     widget.callback?.(value, null, node);
     node.setDirtyCanvas?.(true, true);
     node.graph?.setDirtyCanvas?.(true, true);
-}
-
-function readLayout(node) {
-    const raw = widgetValue(node, "layout_json", "{}");
-    try {
-        const parsed = JSON.parse(raw || "{}");
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            return {
-                x: Number.isFinite(Number(parsed.x)) ? Number(parsed.x) : 50,
-                y: Number.isFinite(Number(parsed.y)) ? Number(parsed.y) : 88,
-                w: Number.isFinite(Number(parsed.w)) ? Number(parsed.w) : 55,
-                h: Number.isFinite(Number(parsed.h)) ? Number(parsed.h) : defaultLayoutHeight(node),
-                layout: typeof parsed.layout === "string" ? parsed.layout : defaultLayoutName(node),
-            };
-        }
-    } catch {
-        // Keep the node usable even if a user pasted invalid JSON.
-    }
-    return { x: 50, y: 88, w: 55, h: defaultLayoutHeight(node), layout: defaultLayoutName(node) };
-}
-
-function writeLayout(node, next) {
-    const layout = {
-        x: round(clamp(next.x, 0, 100)),
-        y: round(clamp(next.y, 0, 100)),
-        w: round(clamp(next.w, MIN_WIDTH, MAX_WIDTH)),
-        h: round(clamp(next.h ?? defaultLayoutHeight(node), MIN_WIDTH, MAX_WIDTH)),
-        layout: next.layout || defaultLayoutName(node),
-    };
-    setWidgetValue(node, "layout_json", JSON.stringify(layout));
 }
 
 function mode(node) {
@@ -145,110 +125,152 @@ function mode(node) {
     return MODE_TO_EN[value] || value;
 }
 
-function defaultLayoutName(node) {
-    if (mode(node) === "Logo") {
+function defaultLayoutName(modeName) {
+    if (modeName === "Logo") {
         return "Logo Only";
     }
-    if (mode(node) === "Logo + Text") {
+    if (modeName === "Logo + Text") {
         return "Logo Left";
     }
-    if (mode(node) === "Pattern Watermark") {
+    if (modeName === "Pattern Watermark") {
         return "Pattern Only";
     }
     return "Text Only Bar";
 }
 
-function defaultLayoutHeight(node) {
-    if (mode(node) === "Pattern Watermark") {
-        return 84;
+function defaultLayoutForMode(modeName, aspect = 9 / 16) {
+    if (modeName === "Logo") {
+        return { x: 50, y: 50, w: 42, h: aspect < 0.8 ? 16 : 24, layout: "Logo Only", aspect };
     }
-    if (mode(node) === "Logo") {
-        return 24;
+    if (modeName === "Logo + Text") {
+        return { x: 50, y: 86, w: 72, h: aspect < 0.8 ? 10 : 14, layout: "Logo Left", aspect };
     }
-    return 18;
+    if (modeName === "Transparent Watermark") {
+        return { x: 50, y: 50, w: 72, h: 16, layout: "Text Only", aspect };
+    }
+    if (modeName === "Pattern Watermark") {
+        return { x: 50, y: 50, w: 100, h: 100, layout: "Pattern Only", aspect };
+    }
+    if (modeName === "Text") {
+        return { x: 50, y: 88, w: 74, h: 10, layout: "Text Only", aspect };
+    }
+    return { x: 50, y: 91, w: 86, h: 12, layout: "Text Only Bar", aspect };
 }
 
-function hideLayoutJson(node) {
-    const widget = findWidget(node, "layout_json");
-    if (!widget) {
-        return;
+function readLayout(node) {
+    const fallback = defaultLayoutForMode(mode(node), canvasAspect(node));
+    const raw = widgetValue(node, "layout_json", "{}");
+    try {
+        const parsed = JSON.parse(raw || "{}");
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            return {
+                x: Number.isFinite(Number(parsed.x)) ? Number(parsed.x) : fallback.x,
+                y: Number.isFinite(Number(parsed.y)) ? Number(parsed.y) : fallback.y,
+                w: Number.isFinite(Number(parsed.w)) ? Number(parsed.w) : fallback.w,
+                h: Number.isFinite(Number(parsed.h)) ? Number(parsed.h) : fallback.h,
+                layout: typeof parsed.layout === "string" ? parsed.layout : fallback.layout,
+                aspect: Number.isFinite(Number(parsed.aspect)) ? Number(parsed.aspect) : fallback.aspect,
+            };
+        }
+    } catch {
+        // Invalid hand-edited JSON should not break the node UI.
     }
+    return fallback;
+}
 
-    widget.hidden = true;
-    widget.type = "hidden";
-    widget.computeSize = () => [0, -4];
-    widget.serialize = true;
+function writeLayout(node, next) {
+    const aspect = canvasAspect(node);
+    const layout = {
+        x: round(clamp(Number(next.x), 0, 100)),
+        y: round(clamp(Number(next.y), 0, 100)),
+        w: round(clamp(Number(next.w), MIN_BOX, 100)),
+        h: round(clamp(Number(next.h), MIN_BOX, 100)),
+        layout: next.layout || defaultLayoutName(mode(node)),
+        aspect,
+    };
+    setWidgetValue(node, "layout_json", JSON.stringify(layout));
+}
+
+function resetLayoutForMode(node) {
+    writeLayout(node, defaultLayoutForMode(mode(node), canvasAspect(node)));
+}
+
+function hexColor(value, fallback = "#ffffff") {
+    const raw = String(value || "").trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(raw)) {
+        return raw.toLowerCase();
+    }
+    if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
+        return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`.toLowerCase();
+    }
+    return fallback;
+}
+
+function opacityPercent(node) {
+    const value = Number(widgetValue(node, "text_opacity", 100));
+    return value > 100 ? Math.round((value / 255) * 100) : clamp(value, 0, 100);
+}
+
+function canvasAspect(node) {
+    refreshAspectFromImgs(node);
+    return node._fcwAspect || readAspectFromLayout(node) || 9 / 16;
+}
+
+function readAspectFromLayout(node) {
+    try {
+        const parsed = JSON.parse(widgetValue(node, "layout_json", "{}") || "{}");
+        const aspect = Number(parsed.aspect);
+        return Number.isFinite(aspect) && aspect > 0 ? aspect : null;
+    } catch {
+        return null;
+    }
+}
+
+function refreshAspectFromImgs(node) {
+    const img = node?.imgs?.[0];
+    const width = img?.naturalWidth || img?.width;
+    const height = img?.naturalHeight || img?.height;
+    if (width > 0 && height > 0) {
+        node._fcwAspect = width / height;
+    }
+}
+
+function drawRoundRect(ctx, x, y, width, height, radius) {
+    const r = Math.min(radius, width / 2, height / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + width - r, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+    ctx.lineTo(x + width, y + height - r);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+    ctx.lineTo(x + r, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
 }
 
 function setWidgetHidden(widget, hidden) {
     if (!widget) {
         return;
     }
-
     if (!widget._fcwOriginalComputeSize) {
         widget._fcwOriginalComputeSize = widget.computeSize;
     }
     if (!widget._fcwOriginalType) {
         widget._fcwOriginalType = widget.type;
     }
-
     widget.hidden = hidden;
     widget.type = hidden ? "hidden" : widget._fcwOriginalType;
-    if (hidden) {
-        widget.computeSize = () => [0, -4];
-    } else if (widget._fcwOriginalComputeSize) {
-        widget.computeSize = widget._fcwOriginalComputeSize;
-    }
+    widget.computeSize = hidden ? () => [0, -4] : widget._fcwOriginalComputeSize;
+    widget.serialize = true;
 }
 
 function migrateWidgetValue(node, name, mapping) {
     const widget = findWidget(node, name);
-    if (!widget || !Object.hasOwn(mapping, widget.value)) {
-        return;
+    if (widget && Object.hasOwn(mapping, widget.value)) {
+        setWidgetValue(node, name, mapping[widget.value]);
     }
-    setWidgetValue(node, name, mapping[widget.value]);
-}
-
-function applyChineseLabels(node) {
-    for (const widget of node.widgets || []) {
-        if (LABELS[widget.name]) {
-            widget.label = LABELS[widget.name];
-        }
-    }
-}
-
-function applyCompactVisibility(node) {
-    const modeName = mode(node);
-    const alwaysHidden = ["layout_json", "auto_adapt", "safe_margin", "pattern_scale_min", "pattern_scale_max"];
-    const textWidgets = ["font_style", "line_1", "line_2", "line_3", "font_size", "text_color", "text_opacity"];
-    const barWidgets = ["bar_color", "bar_opacity", "bar_height"];
-    const logoWidgets = ["logo_opacity"];
-    const patternWidgets = ["pattern_type", "pattern_color", "pattern_opacity", "pattern_density"];
-
-    const visible = new Set(["mode", "preset"]);
-    if (modeName === "Text") {
-        textWidgets.forEach((name) => visible.add(name));
-    } else if (modeName === "Camera Bar") {
-        textWidgets.concat(barWidgets).forEach((name) => visible.add(name));
-    } else if (modeName === "Logo") {
-        logoWidgets.forEach((name) => visible.add(name));
-    } else if (modeName === "Logo + Text") {
-        textWidgets.concat(logoWidgets).forEach((name) => visible.add(name));
-    } else if (modeName === "Transparent Watermark") {
-        textWidgets.concat(logoWidgets).forEach((name) => visible.add(name));
-    } else if (modeName === "Pattern Watermark") {
-        patternWidgets.forEach((name) => visible.add(name));
-    }
-
-    for (const widget of node.widgets || []) {
-        if (!widget?.name || widget.name === WIDGET_NAME || widget.type === "button") {
-            continue;
-        }
-        setWidgetHidden(widget, alwaysHidden.includes(widget.name) || !visible.has(widget.name));
-    }
-
-    node.setDirtyCanvas?.(true, true);
-    node.graph?.setDirtyCanvas?.(true, true);
 }
 
 function localizeWidgetValues(node) {
@@ -267,54 +289,91 @@ function localizeComboChoices(node) {
     }
 }
 
+function applyChineseLabels(node) {
+    for (const widget of node.widgets || []) {
+        if (LABELS[widget.name]) {
+            widget.label = LABELS[widget.name];
+        }
+    }
+}
+
+function applyCompactVisibility(node) {
+    const modeName = mode(node);
+    const textModes = new Set(["Text", "Logo + Text", "Camera Bar", "Transparent Watermark"]);
+    const visible = new Set(["mode", "text_opacity"]);
+
+    if (modeName !== "Logo") {
+        visible.add("text_color");
+    }
+    if (textModes.has(modeName)) {
+        ["font_style", "line_1", "line_2", "line_3", "font_size"].forEach((name) => visible.add(name));
+    }
+    if (modeName === "Pattern Watermark") {
+        ["pattern_type", "pattern_density", "pattern_seed", "pattern_scale_min", "pattern_scale_max"].forEach((name) => visible.add(name));
+    }
+
+    const alwaysHidden = new Set([
+        "preset",
+        "layout_json",
+        "auto_adapt",
+        "safe_margin",
+        "bar_color",
+        "bar_opacity",
+        "bar_height",
+        "logo_opacity",
+        "pattern_color",
+        "pattern_opacity",
+    ]);
+
+    for (const widget of node.widgets || []) {
+        if (!widget?.name || widget.name === TRANSFORM_WIDGET || widget.name === PALETTE_WIDGET || widget.type === "button") {
+            continue;
+        }
+        setWidgetHidden(widget, alwaysHidden.has(widget.name) || !visible.has(widget.name));
+    }
+    node.setDirtyCanvas?.(true, true);
+    node.graph?.setDirtyCanvas?.(true, true);
+}
+
 function installModeCallback(node) {
     const widget = findWidget(node, "mode");
     if (!widget || widget._fcwModeCallbackInstalled) {
         return;
     }
-
     const originalCallback = widget.callback;
     widget.callback = (value, canvas, targetNode, pos, event) => {
         const result = originalCallback?.(value, canvas, targetNode, pos, event);
+        resetLayoutForMode(node);
         applyCompactVisibility(node);
         return result;
     };
     widget._fcwModeCallbackInstalled = true;
 }
 
-function drawRoundRect(ctx, x, y, width, height, radius) {
-    const r = Math.min(radius, width / 2, height / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + width - r, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + r);
-    ctx.lineTo(x + width, y + height - r);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-    ctx.lineTo(x + r, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
+function transformArea(widgetWidth, widgetY, aspect) {
+    const margin = 12;
+    const header = 24;
+    const maxW = Math.max(120, widgetWidth - margin * 2);
+    const maxH = 160;
+    let width = maxW;
+    let height = width / aspect;
+    if (height > maxH) {
+        height = maxH;
+        width = height * aspect;
+    }
+    return {
+        x: margin + (maxW - width) / 2,
+        y: widgetY + header + 8,
+        w: width,
+        h: height,
+        maxX: margin,
+        maxW,
+    };
 }
 
-function targetBox(modeName, area, layout) {
+function targetBox(area, layout) {
     const width = clamp((layout.w / 100) * area.w, 18, area.w);
-    let height = clamp(((layout.h ?? defaultLayoutHeight({ widgets: [{ name: "mode", value: modeName }] })) / 100) * area.h, 16, area.h);
-
-    if (!Number.isFinite(height)) {
-        height = width * 0.22;
-    }
-    if (modeName === "Logo" && !layout.h) {
-        height = width * 0.42;
-    } else if (modeName === "Logo + Text" && !layout.h) {
-        height = width * 0.26;
-    } else if (modeName === "Transparent Watermark" && !layout.h) {
-        height = width * 0.24;
-    } else if (modeName === "Pattern Watermark" && !layout.h) {
-        height = area.h * 0.84;
-    }
-
-    height = clamp(height, 16, area.h);
+    const height = clamp((layout.h / 100) * area.h, 16, area.h);
     const centerX = area.x + (layout.x / 100) * area.w;
     const centerY = area.y + (layout.y / 100) * area.h;
     return {
@@ -325,10 +384,10 @@ function targetBox(modeName, area, layout) {
     };
 }
 
-function drawPatternPreview(ctx, box) {
-    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+function drawPatternPreview(ctx, box, color, alpha) {
+    ctx.strokeStyle = `${color}${alpha}`;
     ctx.lineWidth = 1;
-    for (let x = box.x + 10; x < box.x + box.w; x += 18) {
+    for (let x = box.x - box.h; x < box.x + box.w + box.h; x += 18) {
         ctx.beginPath();
         ctx.moveTo(x, box.y + box.h);
         ctx.lineTo(x + box.h, box.y);
@@ -338,47 +397,103 @@ function drawPatternPreview(ctx, box) {
 
 function drawModePreview(ctx, node, box) {
     const modeName = mode(node);
-    ctx.save();
-    ctx.globalAlpha = modeName === "Transparent Watermark" ? 0.48 : 1;
+    const color = hexColor(widgetValue(node, "text_color", "#ffffff"));
+    const alpha = clamp(opacityPercent(node) / 100, 0.08, 1);
 
+    ctx.save();
+    ctx.globalAlpha = alpha;
     if (modeName === "Pattern Watermark") {
-        ctx.fillStyle = "rgba(96, 165, 250, 0.14)";
+        ctx.fillStyle = `${color}24`;
         drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
         ctx.fill();
-        drawPatternPreview(ctx, box);
+        drawPatternPreview(ctx, box, color, "66");
     } else if (modeName === "Logo") {
-        ctx.fillStyle = "rgba(96, 165, 250, 0.28)";
+        ctx.fillStyle = "rgba(96,165,250,0.28)";
         drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
         ctx.fill();
         ctx.fillStyle = "#dbeafe";
         ctx.font = "12px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText("LOGO", box.x + box.w / 2, box.y + box.h / 2 + 4);
+        ctx.fillText("LOGO 原色", box.x + box.w / 2, box.y + box.h / 2 + 4);
     } else if (modeName === "Logo + Text") {
-        ctx.fillStyle = "rgba(255,255,255,0.92)";
-        drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
+        ctx.fillStyle = "rgba(96,165,250,0.28)";
+        drawRoundRect(ctx, box.x + 8, box.y + 8, box.w * 0.22, box.h - 16, 4);
         ctx.fill();
-        ctx.fillStyle = "rgba(96, 165, 250, 0.35)";
-        drawRoundRect(ctx, box.x + 8, box.y + 7, box.w * 0.22, box.h - 14, 4);
-        ctx.fill();
-        ctx.fillStyle = "#1f2937";
+        ctx.fillStyle = color;
         ctx.fillRect(box.x + box.w * 0.34, box.y + box.h * 0.34, box.w * 0.52, 2);
         ctx.fillRect(box.x + box.w * 0.34, box.y + box.h * 0.55, box.w * 0.42, 2);
     } else {
-        ctx.fillStyle = "rgba(255,255,255,0.94)";
+        ctx.fillStyle = modeName === "Camera Bar" ? color : `${color}33`;
         drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
         ctx.fill();
-        ctx.fillStyle = "#111827";
+        ctx.fillStyle = modeName === "Camera Bar" ? "#111827" : color;
         ctx.fillRect(box.x + box.w * 0.16, box.y + box.h * 0.34, box.w * 0.68, 2);
         ctx.fillRect(box.x + box.w * 0.28, box.y + box.h * 0.56, box.w * 0.44, 2);
     }
-
     ctx.restore();
+}
+
+class ColorPaletteWidget {
+    constructor() {
+        this.name = PALETTE_WIDGET;
+        this.type = "custom";
+        this.value = "";
+        this._swatches = [];
+    }
+
+    computeSize(width) {
+        return [width, PALETTE_HEIGHT];
+    }
+
+    draw(ctx, node, widgetWidth, widgetY) {
+        const modeName = mode(node);
+        const current = hexColor(widgetValue(node, "text_color", "#ffffff"));
+        const muted = modeName === "Logo";
+        this._swatches = [];
+
+        ctx.save();
+        ctx.font = "12px sans-serif";
+        ctx.fillStyle = muted ? "#8b949e" : "#d1d5db";
+        ctx.fillText(muted ? "Logo 保留原色，颜色不改变 Logo" : "常用色", 12, widgetY + 16);
+
+        let x = 96;
+        for (const [label, color] of COLOR_SWATCHES) {
+            const box = { x, y: widgetY + 4, w: 24, h: 22, color };
+            this._swatches.push(box);
+            ctx.globalAlpha = muted ? 0.35 : 1;
+            ctx.fillStyle = color;
+            ctx.fillRect(box.x, box.y, box.w, box.h);
+            ctx.strokeStyle = current === color ? "#60a5fa" : "#4b5563";
+            ctx.lineWidth = current === color ? 2 : 1;
+            ctx.strokeRect(box.x, box.y, box.w, box.h);
+            ctx.fillStyle = color === "#000000" ? "#ffffff" : "#111827";
+            ctx.font = "10px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(label, box.x + box.w / 2, box.y + 15);
+            x += 30;
+        }
+        ctx.restore();
+    }
+
+    mouse(event, pos, node) {
+        if (mode(node) === "Logo") {
+            return false;
+        }
+        if (event.type !== "pointerdown") {
+            return false;
+        }
+        const hit = this._swatches.find((box) => pos[0] >= box.x && pos[0] <= box.x + box.w && pos[1] >= box.y && pos[1] <= box.y + box.h);
+        if (!hit) {
+            return false;
+        }
+        setWidgetValue(node, "text_color", hit.color);
+        return true;
+    }
 }
 
 class WatermarkTransformWidget {
     constructor() {
-        this.name = WIDGET_NAME;
+        this.name = TRANSFORM_WIDGET;
         this.type = "custom";
         this.value = "";
         this._area = null;
@@ -391,16 +506,10 @@ class WatermarkTransformWidget {
     }
 
     draw(ctx, node, widgetWidth, widgetY) {
-        const margin = 12;
-        const headerY = widgetY + 14;
-        const area = {
-            x: margin,
-            y: widgetY + 30,
-            w: Math.max(120, widgetWidth - margin * 2),
-            h: 142,
-        };
+        const aspect = canvasAspect(node);
+        const area = transformArea(widgetWidth, widgetY, aspect);
         const layout = readLayout(node);
-        const box = targetBox(mode(node), area, layout);
+        const box = targetBox(area, layout);
         this._area = area;
         this._box = box;
 
@@ -408,7 +517,7 @@ class WatermarkTransformWidget {
         ctx.font = "12px sans-serif";
         ctx.textAlign = "left";
         ctx.fillStyle = "#d1d5db";
-        ctx.fillText("拖动移动，拉右下角缩放", margin, headerY);
+        ctx.fillText("拖动移动，拉右下角缩放", 12, widgetY + 16);
 
         ctx.fillStyle = "#1f242c";
         drawRoundRect(ctx, area.x, area.y, area.w, area.h, 7);
@@ -440,17 +549,17 @@ class WatermarkTransformWidget {
         drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
         ctx.stroke();
 
-        const handleSize = 12;
+        const handle = 12;
         ctx.fillStyle = "#60a5fa";
-        ctx.fillRect(box.x + box.w - handleSize, box.y + box.h - handleSize, handleSize, handleSize);
+        ctx.fillRect(box.x + box.w - handle, box.y + box.h - handle, handle, handle);
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 1;
-        ctx.strokeRect(box.x + box.w - handleSize, box.y + box.h - handleSize, handleSize, handleSize);
+        ctx.strokeRect(box.x + box.w - handle, box.y + box.h - handle, handle, handle);
 
         ctx.fillStyle = "#9ca3af";
         ctx.font = "10px sans-serif";
         ctx.textAlign = "right";
-        ctx.fillText(`位置 ${round(layout.x)}, ${round(layout.y)}  宽 ${round(layout.w)}% 高 ${round(layout.h)}%`, area.x + area.w, area.y + area.h + 15);
+        ctx.fillText(`位置 ${round(layout.x)}, ${round(layout.y)}  宽 ${round(layout.w)}%  高 ${round(layout.h)}%`, area.maxX + area.maxW, area.y + area.h + 16);
         ctx.restore();
     }
 
@@ -458,28 +567,20 @@ class WatermarkTransformWidget {
         if (!this._area || !this._box) {
             return false;
         }
-
-        const x = pos[0];
-        const y = pos[1];
+        const [x, y] = pos;
         const area = this._area;
         const box = this._box;
-        const handleSize = 16;
+        const handle = 16;
         const inBox = x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h;
-        const inHandle = x >= box.x + box.w - handleSize && x <= box.x + box.w + 4
-            && y >= box.y + box.h - handleSize && y <= box.y + box.h + 4;
+        const inHandle = x >= box.x + box.w - handle && x <= box.x + box.w + 4 && y >= box.y + box.h - handle && y <= box.y + box.h + 4;
 
         if (event.type === "pointerdown") {
             if (!inBox) {
                 return false;
             }
-
             this._drag = {
                 mode: inHandle ? "scale" : "move",
-                startX: x,
-                startY: y,
-                startW: readLayout(node).w,
-                startH: readLayout(node).h,
-                layout: readLayout(node),
+                start: readLayout(node),
                 centerX: box.x + box.w / 2,
                 centerY: box.y + box.h / 2,
             };
@@ -487,17 +588,15 @@ class WatermarkTransformWidget {
         }
 
         if (event.type === "pointermove" && this._drag) {
-            const current = { ...this._drag.layout };
+            const next = { ...this._drag.start };
             if (this._drag.mode === "move") {
-                current.x = ((x - area.x) / area.w) * 100;
-                current.y = ((y - area.y) / area.h) * 100;
+                next.x = ((x - area.x) / area.w) * 100;
+                next.y = ((y - area.y) / area.h) * 100;
             } else {
-                const widthFromCenter = Math.abs(x - this._drag.centerX) * 2;
-                const heightFromCenter = Math.abs(y - this._drag.centerY) * 2;
-                current.w = (widthFromCenter / area.w) * 100;
-                current.h = (heightFromCenter / area.h) * 100;
+                next.w = (Math.abs(x - this._drag.centerX) * 2 / area.w) * 100;
+                next.h = (Math.abs(y - this._drag.centerY) * 2 / area.h) * 100;
             }
-            writeLayout(node, current);
+            writeLayout(node, next);
             return true;
         }
 
@@ -505,7 +604,6 @@ class WatermarkTransformWidget {
             this._drag = null;
             return true;
         }
-
         return false;
     }
 }
@@ -518,35 +616,44 @@ function addButton(node, name, callback) {
 }
 
 function randomizePattern(node) {
-    const choices = ["圆点", "斜线", "波纹", "星光", "色块"];
     const current = String(widgetValue(node, "pattern_type", "无"));
     if (current === "无" || current === "None") {
-        setWidgetValue(node, "pattern_type", choices[Math.floor(Math.random() * choices.length)]);
+        setWidgetValue(node, "pattern_type", "圆点");
     }
     setWidgetValue(node, "pattern_seed", Math.floor(Math.random() * 2147483647));
 }
 
-function addTransformWidget(node) {
-    if (node.widgets?.some((widget) => widget?.name === WIDGET_NAME)) {
+function fitWidth(node) {
+    const layout = readLayout(node);
+    const modeName = mode(node);
+    writeLayout(node, {
+        ...layout,
+        w: modeName === "Pattern Watermark" ? 100 : 86,
+        h: modeName === "Pattern Watermark" ? 100 : layout.h,
+    });
+}
+
+function addCustomWidgets(node) {
+    if (node.widgets?.some((widget) => widget?.name === TRANSFORM_WIDGET)) {
         return;
     }
-
-    hideLayoutJson(node);
     localizeWidgetValues(node);
     localizeComboChoices(node);
     applyChineseLabels(node);
     installModeCallback(node);
-    applyCompactVisibility(node);
-    node.addCustomWidget(new WatermarkTransformWidget());
-    addButton(node, "重置位置", (target) => setWidgetValue(target, "layout_json", "{}"));
-    addButton(node, "居中", (target) => writeLayout(target, { ...readLayout(target), x: 50, y: 50 }));
-    addButton(node, "底部", (target) => writeLayout(target, { ...readLayout(target), x: 50, y: 88 }));
-    addButton(node, "适配宽度", (target) => writeLayout(target, { ...readLayout(target), w: 78, h: mode(target) === "Pattern Watermark" ? 84 : readLayout(target).h }));
-    addButton(node, "随机图案", randomizePattern);
-    node.serialize_widgets = true;
 
+    node.addCustomWidget(new ColorPaletteWidget());
+    node.addCustomWidget(new WatermarkTransformWidget());
+    addButton(node, "重置位置", resetLayoutForMode);
+    addButton(node, "居中", (target) => writeLayout(target, { ...readLayout(target), x: 50, y: 50 }));
+    addButton(node, "底部", (target) => writeLayout(target, { ...readLayout(target), x: 50, y: 90 }));
+    addButton(node, "适配宽度", fitWidth);
+    addButton(node, "随机图案", randomizePattern);
+    applyCompactVisibility(node);
+
+    node.serialize_widgets = true;
     const width = Math.max(node.size?.[0] || 330, 380);
-    const height = Math.max(node.size?.[1] || 360, 520);
+    const height = Math.max(node.size?.[1] || 360, 500);
     node.setSize?.([width, height]);
 }
 
@@ -560,7 +667,18 @@ app.registerExtension({
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () {
             const result = onNodeCreated?.apply(this, arguments);
-            addTransformWidget(this);
+            addCustomWidgets(this);
+            return result;
+        };
+
+        const onExecuted = nodeType.prototype.onExecuted;
+        nodeType.prototype.onExecuted = function (message) {
+            const result = onExecuted?.apply(this, arguments);
+            setTimeout(() => {
+                refreshAspectFromImgs(this);
+                this.setDirtyCanvas?.(true, true);
+                this.graph?.setDirtyCanvas?.(true, true);
+            }, 60);
             return result;
         };
     },
