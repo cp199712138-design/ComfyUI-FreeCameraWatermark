@@ -40,6 +40,7 @@ const FONT_TO_CN = {
 };
 
 const PATTERN_TO_CN = {
+    "Sci-Fi Grid": "科幻光栅",
     None: "无",
     Dots: "圆点",
     "Diagonal Lines": "斜线",
@@ -125,6 +126,13 @@ function mode(node) {
     return MODE_TO_EN[value] || value;
 }
 
+const PATTERN_TO_EN = Object.fromEntries(Object.entries(PATTERN_TO_CN).map(([key, value]) => [value, key]));
+
+function patternType(node) {
+    const value = String(widgetValue(node, "pattern_type", "科幻光栅"));
+    return PATTERN_TO_EN[value] || value;
+}
+
 function defaultLayoutName(modeName) {
     if (modeName === "Logo") {
         return "Logo Only";
@@ -158,11 +166,15 @@ function defaultLayoutForMode(modeName, aspect = 9 / 16) {
 }
 
 function readLayout(node) {
-    const fallback = defaultLayoutForMode(mode(node), canvasAspect(node));
+    const modeName = mode(node);
+    const fallback = defaultLayoutForMode(modeName, canvasAspect(node));
     const raw = widgetValue(node, "layout_json", "{}");
     try {
         const parsed = JSON.parse(raw || "{}");
         if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            if (parsed.mode && parsed.mode !== modeName) {
+                return fallback;
+            }
             return {
                 x: Number.isFinite(Number(parsed.x)) ? Number(parsed.x) : fallback.x,
                 y: Number.isFinite(Number(parsed.y)) ? Number(parsed.y) : fallback.y,
@@ -170,6 +182,7 @@ function readLayout(node) {
                 h: Number.isFinite(Number(parsed.h)) ? Number(parsed.h) : fallback.h,
                 layout: typeof parsed.layout === "string" ? parsed.layout : fallback.layout,
                 aspect: Number.isFinite(Number(parsed.aspect)) ? Number(parsed.aspect) : fallback.aspect,
+                mode: modeName,
             };
         }
     } catch {
@@ -180,12 +193,14 @@ function readLayout(node) {
 
 function writeLayout(node, next) {
     const aspect = canvasAspect(node);
+    const modeName = mode(node);
     const layout = {
         x: round(clamp(Number(next.x), 0, 100)),
         y: round(clamp(Number(next.y), 0, 100)),
         w: round(clamp(Number(next.w), MIN_BOX, 100)),
         h: round(clamp(Number(next.h), MIN_BOX, 100)),
-        layout: next.layout || defaultLayoutName(mode(node)),
+        layout: next.layout || defaultLayoutName(modeName),
+        mode: modeName,
         aspect,
     };
     setWidgetValue(node, "layout_json", JSON.stringify(layout));
@@ -384,7 +399,93 @@ function targetBox(area, layout) {
     };
 }
 
-function drawPatternPreview(ctx, box, color, alpha) {
+function imageSize(node, area) {
+    const img = node?.imgs?.[0];
+    const width = img?.naturalWidth || img?.width || Math.round(area.w);
+    const height = img?.naturalHeight || img?.height || Math.round(area.h);
+    return { width, height };
+}
+
+function drawReferenceCanvas(ctx, node, area) {
+    const img = node?.imgs?.[0];
+    ctx.save();
+    drawRoundRect(ctx, area.x, area.y, area.w, area.h, 7);
+    ctx.clip();
+    if (img) {
+        ctx.fillStyle = "#111827";
+        ctx.fillRect(area.x, area.y, area.w, area.h);
+        ctx.drawImage(img, area.x, area.y, area.w, area.h);
+        ctx.fillStyle = "rgba(0,0,0,0.12)";
+        ctx.fillRect(area.x, area.y, area.w, area.h);
+    } else {
+        ctx.fillStyle = "#1f242c";
+        ctx.fillRect(area.x, area.y, area.w, area.h);
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.lineWidth = 1;
+        for (let i = 1; i < 4; i += 1) {
+            const x = area.x + (area.w * i) / 4;
+            ctx.beginPath();
+            ctx.moveTo(x, area.y);
+            ctx.lineTo(x, area.y + area.h);
+            ctx.stroke();
+        }
+        for (let i = 1; i < 3; i += 1) {
+            const y = area.y + (area.h * i) / 3;
+            ctx.beginPath();
+            ctx.moveTo(area.x, y);
+            ctx.lineTo(area.x + area.w, y);
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+
+    ctx.strokeStyle = "#4b5563";
+    ctx.lineWidth = 1;
+    drawRoundRect(ctx, area.x, area.y, area.w, area.h, 7);
+    ctx.stroke();
+}
+
+function drawSciFiPatternPreview(ctx, box, color, alpha) {
+    ctx.save();
+    ctx.strokeStyle = `${color}${alpha}`;
+    ctx.fillStyle = `${color}18`;
+    ctx.lineWidth = 1;
+    const gap = Math.max(12, Math.min(box.w, box.h) / 5);
+    for (let x = box.x; x <= box.x + box.w; x += gap) {
+        ctx.beginPath();
+        ctx.moveTo(x, box.y);
+        ctx.lineTo(x, box.y + box.h);
+        ctx.stroke();
+    }
+    for (let y = box.y; y <= box.y + box.h; y += gap) {
+        ctx.beginPath();
+        ctx.moveTo(box.x, y);
+        ctx.lineTo(box.x + box.w, y);
+        ctx.stroke();
+    }
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(box.x + box.w * 0.08, box.y + box.h * 0.22);
+    ctx.lineTo(box.x + box.w * 0.42, box.y + box.h * 0.22);
+    ctx.lineTo(box.x + box.w * 0.52, box.y + box.h * 0.34);
+    ctx.lineTo(box.x + box.w * 0.9, box.y + box.h * 0.34);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(box.x + box.w * 0.12, box.y + box.h * 0.74);
+    ctx.lineTo(box.x + box.w * 0.36, box.y + box.h * 0.74);
+    ctx.lineTo(box.x + box.w * 0.46, box.y + box.h * 0.62);
+    ctx.lineTo(box.x + box.w * 0.82, box.y + box.h * 0.62);
+    ctx.stroke();
+    ctx.fillRect(box.x + box.w * 0.16, box.y + box.h * 0.42, box.w * 0.12, 2);
+    ctx.fillRect(box.x + box.w * 0.66, box.y + box.h * 0.48, box.w * 0.18, 2);
+    ctx.restore();
+}
+
+function drawPatternPreview(ctx, node, box, color, alpha) {
+    if (patternType(node) === "Sci-Fi Grid") {
+        drawSciFiPatternPreview(ctx, box, color, alpha);
+        return;
+    }
     ctx.strokeStyle = `${color}${alpha}`;
     ctx.lineWidth = 1;
     for (let x = box.x - box.h; x < box.x + box.w + box.h; x += 18) {
@@ -406,7 +507,7 @@ function drawModePreview(ctx, node, box) {
         ctx.fillStyle = `${color}24`;
         drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
         ctx.fill();
-        drawPatternPreview(ctx, box, color, "66");
+        drawPatternPreview(ctx, node, box, color, "66");
     } else if (modeName === "Logo") {
         ctx.fillStyle = "rgba(96,165,250,0.28)";
         drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
@@ -519,28 +620,7 @@ class WatermarkTransformWidget {
         ctx.fillStyle = "#d1d5db";
         ctx.fillText("拖动移动，拉右下角缩放", 12, widgetY + 16);
 
-        ctx.fillStyle = "#1f242c";
-        drawRoundRect(ctx, area.x, area.y, area.w, area.h, 7);
-        ctx.fill();
-        ctx.strokeStyle = "#4b5563";
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        ctx.strokeStyle = "rgba(255,255,255,0.08)";
-        for (let i = 1; i < 4; i += 1) {
-            const x = area.x + (area.w * i) / 4;
-            ctx.beginPath();
-            ctx.moveTo(x, area.y);
-            ctx.lineTo(x, area.y + area.h);
-            ctx.stroke();
-        }
-        for (let i = 1; i < 3; i += 1) {
-            const y = area.y + (area.h * i) / 3;
-            ctx.beginPath();
-            ctx.moveTo(area.x, y);
-            ctx.lineTo(area.x + area.w, y);
-            ctx.stroke();
-        }
+        drawReferenceCanvas(ctx, node, area);
 
         drawModePreview(ctx, node, box);
 
@@ -549,17 +629,20 @@ class WatermarkTransformWidget {
         drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
         ctx.stroke();
 
-        const handle = 12;
+        const handle = 16;
         ctx.fillStyle = "#60a5fa";
         ctx.fillRect(box.x + box.w - handle, box.y + box.h - handle, handle, handle);
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 1;
         ctx.strokeRect(box.x + box.w - handle, box.y + box.h - handle, handle, handle);
 
+        const pixels = imageSize(node, area);
+        const approxW = Math.round((layout.w / 100) * pixels.width);
+        const approxH = Math.round((layout.h / 100) * pixels.height);
         ctx.fillStyle = "#9ca3af";
         ctx.font = "10px sans-serif";
         ctx.textAlign = "right";
-        ctx.fillText(`位置 ${round(layout.x)}, ${round(layout.y)}  宽 ${round(layout.w)}%  高 ${round(layout.h)}%`, area.maxX + area.maxW, area.y + area.h + 16);
+        ctx.fillText(`x ${round(layout.x)}%  y ${round(layout.y)}%  宽 ${round(layout.w)}%  高 ${round(layout.h)}%  约 ${approxW}×${approxH}px`, area.maxX + area.maxW, area.y + area.h + 16);
         ctx.restore();
     }
 
@@ -570,19 +653,29 @@ class WatermarkTransformWidget {
         const [x, y] = pos;
         const area = this._area;
         const box = this._box;
-        const handle = 16;
-        const inBox = x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h;
-        const inHandle = x >= box.x + box.w - handle && x <= box.x + box.w + 4 && y >= box.y + box.h - handle && y <= box.y + box.h + 4;
+        const hitPad = 8;
+        const handle = 24;
+        const inArea = x >= area.x && x <= area.x + area.w && y >= area.y && y <= area.y + area.h;
+        const inBox = x >= box.x - hitPad && x <= box.x + box.w + hitPad && y >= box.y - hitPad && y <= box.y + box.h + hitPad;
+        const inHandle = x >= box.x + box.w - handle && x <= box.x + box.w + hitPad && y >= box.y + box.h - handle && y <= box.y + box.h + hitPad;
 
         if (event.type === "pointerdown") {
-            if (!inBox) {
+            if (!inArea && !inBox) {
                 return false;
+            }
+            const start = readLayout(node);
+            const pointerX = ((clamp(x, area.x, area.x + area.w) - area.x) / area.w) * 100;
+            const pointerY = ((clamp(y, area.y, area.y + area.h) - area.y) / area.h) * 100;
+            if (!inBox) {
+                writeLayout(node, { ...start, x: pointerX, y: pointerY });
             }
             this._drag = {
                 mode: inHandle ? "scale" : "move",
-                start: readLayout(node),
-                centerX: box.x + box.w / 2,
-                centerY: box.y + box.h / 2,
+                start,
+                offsetX: inBox ? pointerX - start.x : 0,
+                offsetY: inBox ? pointerY - start.y : 0,
+                left: ((box.x - area.x) / area.w) * 100,
+                top: ((box.y - area.y) / area.h) * 100,
             };
             return true;
         }
@@ -590,11 +683,15 @@ class WatermarkTransformWidget {
         if (event.type === "pointermove" && this._drag) {
             const next = { ...this._drag.start };
             if (this._drag.mode === "move") {
-                next.x = ((x - area.x) / area.w) * 100;
-                next.y = ((y - area.y) / area.h) * 100;
+                next.x = ((clamp(x, area.x, area.x + area.w) - area.x) / area.w) * 100 - this._drag.offsetX;
+                next.y = ((clamp(y, area.y, area.y + area.h) - area.y) / area.h) * 100 - this._drag.offsetY;
             } else {
-                next.w = (Math.abs(x - this._drag.centerX) * 2 / area.w) * 100;
-                next.h = (Math.abs(y - this._drag.centerY) * 2 / area.h) * 100;
+                const right = ((clamp(x, area.x, area.x + area.w) - area.x) / area.w) * 100;
+                const bottom = ((clamp(y, area.y, area.y + area.h) - area.y) / area.h) * 100;
+                next.w = Math.max(MIN_BOX, right - this._drag.left);
+                next.h = Math.max(MIN_BOX, bottom - this._drag.top);
+                next.x = this._drag.left + next.w / 2;
+                next.y = this._drag.top + next.h / 2;
             }
             writeLayout(node, next);
             return true;
@@ -616,9 +713,9 @@ function addButton(node, name, callback) {
 }
 
 function randomizePattern(node) {
-    const current = String(widgetValue(node, "pattern_type", "无"));
+    const current = String(widgetValue(node, "pattern_type", "科幻光栅"));
     if (current === "无" || current === "None") {
-        setWidgetValue(node, "pattern_type", "圆点");
+        setWidgetValue(node, "pattern_type", "科幻光栅");
     }
     setWidgetValue(node, "pattern_seed", Math.floor(Math.random() * 2147483647));
 }

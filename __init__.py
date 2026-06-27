@@ -44,6 +44,7 @@ FONT_STYLES = [
     "\u4e2d\u6587\u6807\u9898(\u53ef\u9009)",
 ]
 PATTERN_TYPES = [
+    "\u79d1\u5e7b\u5149\u6805",
     "\u65e0",
     "\u5706\u70b9",
     "\u659c\u7ebf",
@@ -87,6 +88,7 @@ LEGACY_PATTERN_TYPES = [
     "Soft Waves",
     "Tiny Stars",
     "Gradient Blocks",
+    "Sci-Fi Grid",
 ]
 
 MODE_CHOICES = list(dict.fromkeys(MODES + LEGACY_MODES))
@@ -130,6 +132,7 @@ PATTERN_ALIASES = {
     "\u6ce2\u7eb9": "Soft Waves",
     "\u661f\u5149": "Tiny Stars",
     "\u8272\u5757": "Gradient Blocks",
+    "\u79d1\u5e7b\u5149\u6805": "Sci-Fi Grid",
 }
 
 
@@ -342,6 +345,9 @@ def _resolve_layout(layout_json, mode, preset, width, height, safe_margin, auto_
     layout = _layout_from_preset(mode, preset, width, height, auto_adapt)
     saved = _safe_json(layout_json)
     if saved:
+        saved_mode = _canonical(saved.get("mode"), MODE_ALIASES) if saved.get("mode") else None
+        if saved_mode and saved_mode != mode:
+            return layout
         layout.update({k: saved[k] for k in ("x", "y", "w", "h", "layout") if k in saved})
 
     margin = _clamp(float(safe_margin), 0.0, 25.0)
@@ -419,8 +425,10 @@ def _tile_logo(base, logo_image, target_width, opacity):
 
 def _draw_pattern(base, pattern_type, seed, density, scale_min, scale_max, pattern_color, pattern_opacity, bounds=None):
     pattern_type = _canonical(pattern_type, PATTERN_ALIASES)
-    if pattern_type == "None" or pattern_opacity <= 0:
+    if pattern_opacity <= 0:
         return
+    if pattern_type == "None":
+        pattern_type = "Sci-Fi Grid"
 
     if bounds:
         x0, y0, x1, y1 = [int(v) for v in bounds]
@@ -476,6 +484,54 @@ def _draw_pattern(base, pattern_type, seed, density, scale_min, scale_max, patte
             x = rng.randint(-w, base.width)
             y = rng.randint(-h, base.height)
             draw.rounded_rectangle([x, y, x + w, y + h], radius=max(2, min(w, h) // 5), fill=color)
+    elif pattern_type == "Sci-Fi Grid":
+        rgb = _parse_color(pattern_color, (255, 255, 255))
+        alpha = _opacity(pattern_opacity)
+        soft = rgb + (max(1, int(alpha * 0.28)),)
+        medium = rgb + (max(1, int(alpha * 0.52)),)
+        bright = rgb + (alpha,)
+        span = max(1, min(base.width, base.height))
+        grid_gap = max(10, int(_clamp((min_size + max_size) * 1.8, 10, 90) * 35 / max(8, density)))
+        fine_gap = max(6, grid_gap // 3)
+        line_width = max(1, max_size // 18)
+        random_units = max(8, int(_clamp(density, 1, 100) * (base.width * base.height) / 90000))
+
+        for x in range(rng.randint(-fine_gap, 0), base.width + fine_gap, fine_gap):
+            draw.line([(x, 0), (x, base.height)], fill=soft, width=1)
+        for y in range(rng.randint(-fine_gap, 0), base.height + fine_gap, fine_gap):
+            draw.line([(0, y), (base.width, y)], fill=soft, width=1)
+        for x in range(rng.randint(-grid_gap, 0), base.width + grid_gap, grid_gap):
+            draw.line([(x, 0), (x, base.height)], fill=medium, width=line_width)
+        for y in range(rng.randint(-grid_gap, 0), base.height + grid_gap, grid_gap):
+            draw.line([(0, y), (base.width, y)], fill=medium, width=line_width)
+
+        for _ in range(random_units):
+            length = rng.randint(max(16, span // 8), max(24, span // 2))
+            x = rng.randint(-length, base.width)
+            y = rng.randint(0, base.height + length)
+            drift = rng.randint(length // 4, max(length // 3, length))
+            draw.line([(x, y), (x + length, y - drift)], fill=medium, width=max(1, line_width + 1))
+            if rng.random() < 0.45:
+                draw.line([(x + length // 3, y - drift // 3), (x + length, y - drift)], fill=bright, width=1)
+
+        node_count = max(8, random_units * 2)
+        for _ in range(node_count):
+            x = rng.randint(0, base.width)
+            y = rng.randint(0, base.height)
+            r = rng.randint(max(1, min_size // 3), max(2, max_size // 4))
+            draw.ellipse([x - r, y - r, x + r, y + r], outline=bright, width=1)
+            if r > 2:
+                draw.point((x, y), fill=bright)
+
+        for _ in range(max(5, random_units // 2)):
+            w = rng.randint(max(18, min_size * 5), max(24, max_size * 9))
+            h = rng.randint(max(8, min_size * 2), max(10, max_size * 3))
+            x = rng.randint(-w // 2, base.width)
+            y = rng.randint(0, base.height)
+            corner = max(4, min(w, h) // 3)
+            draw.line([(x, y), (x + corner, y), (x + corner, y + 1)], fill=bright, width=1)
+            draw.line([(x, y), (x, y + corner)], fill=bright, width=1)
+            draw.rectangle([x + corner, y + h // 3, x + w, y + h], outline=soft, width=1)
 
     base.alpha_composite(layer)
 
@@ -512,7 +568,7 @@ class FreeCameraWatermark:
                 "bar_opacity": ("INT", {"default": 100, "min": 0, "max": 255, "step": 1, "tooltip": "兼容旧工作流，新版改用透明度。"}),
                 "bar_height": ("INT", {"default": 90, "min": 0, "max": 1024, "step": 1, "tooltip": "兼容旧工作流，新版用拖拽框高度控制。"}),
                 "logo_opacity": ("INT", {"default": 100, "min": 0, "max": 255, "step": 1, "tooltip": "兼容旧工作流，新版改用统一透明度。"}),
-                "pattern_type": (PATTERN_TYPE_CHOICES, {"default": "\u65e0", "tooltip": "\u56fe\u6848\u6837\u5f0f\u3002"}),
+                "pattern_type": (PATTERN_TYPE_CHOICES, {"default": "\u79d1\u5e7b\u5149\u6805", "tooltip": "\u56fe\u6848\u6837\u5f0f\u3002"}),
                 "pattern_color": ("STRING", {"default": "#ffffff", "tooltip": "兼容旧工作流，新版改用主颜色。"}),
                 "pattern_opacity": ("INT", {"default": 32, "min": 0, "max": 255, "step": 1, "tooltip": "兼容旧工作流，新版改用透明度。"}),
                 "pattern_density": ("INT", {"default": 18, "min": 1, "max": 100, "step": 1, "tooltip": "图案数量。"}),
@@ -579,14 +635,13 @@ class FreeCameraWatermark:
             logo_image = _prepare_logo(logo, logo_mask, index)
 
             if mode == "Pattern Watermark":
-                active_pattern_type = "Dots" if pattern_type == "None" else pattern_type
                 bounds = (
                     center_x - target_width / 2,
                     center_y - target_height / 2,
                     center_x + target_width / 2,
                     center_y + target_height / 2,
                 )
-                _draw_pattern(base, active_pattern_type, pattern_seed, pattern_density, pattern_scale_min, pattern_scale_max, main_color, main_opacity, bounds)
+                _draw_pattern(base, pattern_type, pattern_seed, pattern_density, pattern_scale_min, pattern_scale_max, main_color, main_opacity, bounds)
             elif mode == "Transparent Watermark":
                 if logo_image is not None and preset == "Tiled Transparent Logo":
                     _tile_logo(base, logo_image, target_width, main_opacity)
