@@ -4,8 +4,8 @@ const NODE_NAME = "FreeCameraWatermark";
 const TRANSFORM_WIDGET = "watermark_transform";
 const PALETTE_WIDGET = "watermark_palette";
 const MIN_BOX = 4;
-const CONTROL_HEIGHT = 230;
-const PALETTE_HEIGHT = 34;
+const CONTROL_HEIGHT = 390;
+const PALETTE_HEIGHT = 54;
 
 const MODE_TO_CN = {
     Text: "文字",
@@ -210,6 +210,26 @@ function resetLayoutForMode(node) {
     writeLayout(node, defaultLayoutForMode(mode(node), canvasAspect(node)));
 }
 
+function layoutMode(node) {
+    try {
+        const parsed = JSON.parse(widgetValue(node, "layout_json", "{}") || "{}");
+        return typeof parsed.mode === "string" ? parsed.mode : null;
+    } catch {
+        return null;
+    }
+}
+
+function ensureModeLayout(node) {
+    const modeName = mode(node);
+    if (node._fcwLastMode !== modeName || layoutMode(node) !== modeName) {
+        node._fcwLastMode = modeName;
+        writeLayout(node, defaultLayoutForMode(modeName, canvasAspect(node)));
+        applyCompactVisibility(node);
+        return true;
+    }
+    return false;
+}
+
 function hexColor(value, fallback = "#ffffff") {
     const raw = String(value || "").trim();
     if (/^#[0-9a-fA-F]{6}$/.test(raw)) {
@@ -358,6 +378,7 @@ function installModeCallback(node) {
     const originalCallback = widget.callback;
     widget.callback = (value, canvas, targetNode, pos, event) => {
         const result = originalCallback?.(value, canvas, targetNode, pos, event);
+        node._fcwLastMode = null;
         resetLayoutForMode(node);
         applyCompactVisibility(node);
         return result;
@@ -369,7 +390,7 @@ function transformArea(widgetWidth, widgetY, aspect) {
     const margin = 12;
     const header = 24;
     const maxW = Math.max(120, widgetWidth - margin * 2);
-    const maxH = 160;
+    const maxH = 300;
     let width = maxW;
     let height = width / aspect;
     if (height > maxH) {
@@ -384,6 +405,18 @@ function transformArea(widgetWidth, widgetY, aspect) {
         maxX: margin,
         maxW,
     };
+}
+
+function isDownEvent(event) {
+    return event.type === "pointerdown" || event.type === "mousedown";
+}
+
+function isMoveEvent(event) {
+    return event.type === "pointermove" || event.type === "mousemove";
+}
+
+function isUpEvent(event) {
+    return event.type === "pointerup" || event.type === "mouseup" || event.type === "pointerleave" || event.type === "mouseleave";
 }
 
 function targetBox(area, layout) {
@@ -555,11 +588,11 @@ class ColorPaletteWidget {
         ctx.save();
         ctx.font = "12px sans-serif";
         ctx.fillStyle = muted ? "#8b949e" : "#d1d5db";
-        ctx.fillText(muted ? "Logo 保留原色，颜色不改变 Logo" : "常用色", 12, widgetY + 16);
+        ctx.fillText(muted ? "Logo 保留原色，颜色不改变 Logo" : "常用色", 12, widgetY + 14);
 
-        let x = 96;
+        let x = 12;
         for (const [label, color] of COLOR_SWATCHES) {
-            const box = { x, y: widgetY + 4, w: 24, h: 22, color };
+            const box = { x, y: widgetY + 24, w: 32, h: 22, color };
             this._swatches.push(box);
             ctx.globalAlpha = muted ? 0.35 : 1;
             ctx.fillStyle = color;
@@ -571,7 +604,7 @@ class ColorPaletteWidget {
             ctx.font = "10px sans-serif";
             ctx.textAlign = "center";
             ctx.fillText(label, box.x + box.w / 2, box.y + 15);
-            x += 30;
+            x += 38;
         }
         ctx.restore();
     }
@@ -580,7 +613,7 @@ class ColorPaletteWidget {
         if (mode(node) === "Logo") {
             return false;
         }
-        if (event.type !== "pointerdown") {
+        if (!isDownEvent(event)) {
             return false;
         }
         const hit = this._swatches.find((box) => pos[0] >= box.x && pos[0] <= box.x + box.w && pos[1] >= box.y && pos[1] <= box.y + box.h);
@@ -607,6 +640,7 @@ class WatermarkTransformWidget {
     }
 
     draw(ctx, node, widgetWidth, widgetY) {
+        ensureModeLayout(node);
         const aspect = canvasAspect(node);
         const area = transformArea(widgetWidth, widgetY, aspect);
         const layout = readLayout(node);
@@ -629,7 +663,7 @@ class WatermarkTransformWidget {
         drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
         ctx.stroke();
 
-        const handle = 16;
+        const handle = 22;
         ctx.fillStyle = "#60a5fa";
         ctx.fillRect(box.x + box.w - handle, box.y + box.h - handle, handle, handle);
         ctx.strokeStyle = "#ffffff";
@@ -653,25 +687,27 @@ class WatermarkTransformWidget {
         const [x, y] = pos;
         const area = this._area;
         const box = this._box;
-        const hitPad = 8;
-        const handle = 24;
+        const hitPad = Math.max(32, Math.min(56, Math.max(box.w, box.h) * 0.7));
+        const handle = 42;
         const inArea = x >= area.x && x <= area.x + area.w && y >= area.y && y <= area.y + area.h;
         const inBox = x >= box.x - hitPad && x <= box.x + box.w + hitPad && y >= box.y - hitPad && y <= box.y + box.h + hitPad;
         const inHandle = x >= box.x + box.w - handle && x <= box.x + box.w + hitPad && y >= box.y + box.h - handle && y <= box.y + box.h + hitPad;
 
-        if (event.type === "pointerdown") {
+        if (isDownEvent(event)) {
             if (!inArea && !inBox) {
                 return false;
             }
             const start = readLayout(node);
             const pointerX = ((clamp(x, area.x, area.x + area.w) - area.x) / area.w) * 100;
             const pointerY = ((clamp(y, area.y, area.y + area.h) - area.y) / area.h) * 100;
+            let startLayout = start;
             if (!inBox) {
-                writeLayout(node, { ...start, x: pointerX, y: pointerY });
+                startLayout = { ...start, x: pointerX, y: pointerY };
+                writeLayout(node, startLayout);
             }
             this._drag = {
                 mode: inHandle ? "scale" : "move",
-                start,
+                start: startLayout,
                 offsetX: inBox ? pointerX - start.x : 0,
                 offsetY: inBox ? pointerY - start.y : 0,
                 left: ((box.x - area.x) / area.w) * 100,
@@ -680,7 +716,7 @@ class WatermarkTransformWidget {
             return true;
         }
 
-        if (event.type === "pointermove" && this._drag) {
+        if (isMoveEvent(event) && this._drag) {
             const next = { ...this._drag.start };
             if (this._drag.mode === "move") {
                 next.x = ((clamp(x, area.x, area.x + area.w) - area.x) / area.w) * 100 - this._drag.offsetX;
@@ -697,7 +733,7 @@ class WatermarkTransformWidget {
             return true;
         }
 
-        if ((event.type === "pointerup" || event.type === "pointerleave") && this._drag) {
+        if (isUpEvent(event) && this._drag) {
             this._drag = null;
             return true;
         }
@@ -750,7 +786,7 @@ function addCustomWidgets(node) {
 
     node.serialize_widgets = true;
     const width = Math.max(node.size?.[0] || 330, 380);
-    const height = Math.max(node.size?.[1] || 360, 500);
+    const height = Math.max(node.size?.[1] || 360, 600);
     node.setSize?.([width, height]);
 }
 
