@@ -40,6 +40,7 @@ const FONT_TO_CN = {
 };
 
 const PATTERN_TO_CN = {
+    "Gradient Glow": "渐变光影",
     "Sci-Fi Grid": "科幻光栅",
     None: "无",
     Dots: "圆点",
@@ -131,7 +132,7 @@ function mode(node) {
 const PATTERN_TO_EN = Object.fromEntries(Object.entries(PATTERN_TO_CN).map(([key, value]) => [value, key]));
 
 function patternType(node) {
-    const value = String(widgetValue(node, "pattern_type", "科幻光栅"));
+    const value = String(widgetValue(node, "pattern_type", "渐变光影"));
     return PATTERN_TO_EN[value] || value;
 }
 
@@ -516,8 +517,41 @@ function drawSciFiPatternPreview(ctx, box, color, alpha) {
     ctx.restore();
 }
 
+function drawGradientGlowPreview(ctx, box, color) {
+    ctx.save();
+    drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
+    ctx.clip();
+
+    const gradient = ctx.createLinearGradient(box.x, box.y + box.h, box.x + box.w, box.y);
+    gradient.addColorStop(0, `${color}08`);
+    gradient.addColorStop(0.45, `${color}30`);
+    gradient.addColorStop(1, `${color}66`);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(box.x, box.y, box.w, box.h);
+
+    ctx.strokeStyle = `${color}88`;
+    ctx.lineWidth = 1.5;
+    for (let i = -1; i < 4; i += 1) {
+        const startX = box.x + box.w * (i * 0.3);
+        ctx.beginPath();
+        ctx.moveTo(startX, box.y + box.h);
+        ctx.lineTo(startX + box.w * 0.7, box.y);
+        ctx.stroke();
+    }
+
+    ctx.fillStyle = `${color}28`;
+    ctx.fillRect(box.x + box.w * 0.12, box.y + box.h * 0.22, box.w * 0.22, Math.max(2, box.h * 0.035));
+    ctx.fillRect(box.x + box.w * 0.58, box.y + box.h * 0.68, box.w * 0.28, Math.max(2, box.h * 0.035));
+    ctx.restore();
+}
+
 function drawPatternPreview(ctx, node, box, color, alpha) {
-    if (patternType(node) === "Sci-Fi Grid") {
+    const type = patternType(node);
+    if (type === "Gradient Glow") {
+        drawGradientGlowPreview(ctx, box, color);
+        return;
+    }
+    if (type === "Sci-Fi Grid") {
         drawSciFiPatternPreview(ctx, box, color, alpha);
         return;
     }
@@ -665,7 +699,7 @@ class WatermarkTransformWidget {
         drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
         ctx.stroke();
 
-        const handle = 22;
+        const handle = 11;
         ctx.fillStyle = "#60a5fa";
         ctx.fillRect(box.x + box.w - handle, box.y + box.h - handle, handle, handle);
         ctx.strokeStyle = "#ffffff";
@@ -690,10 +724,11 @@ class WatermarkTransformWidget {
         const area = this._area;
         const box = this._box;
         const hitPad = Math.max(32, Math.min(56, Math.max(box.w, box.h) * 0.7));
-        const handle = 42;
+        const handle = 16;
+        const handleBleed = 4;
         const inArea = x >= area.x && x <= area.x + area.w && y >= area.y && y <= area.y + area.h;
         const inBox = x >= box.x - hitPad && x <= box.x + box.w + hitPad && y >= box.y - hitPad && y <= box.y + box.h + hitPad;
-        const inHandle = x >= box.x + box.w - handle && x <= box.x + box.w + hitPad && y >= box.y + box.h - handle && y <= box.y + box.h + hitPad;
+        const inHandle = x >= box.x + box.w - handle && x <= box.x + box.w + handleBleed && y >= box.y + box.h - handle && y <= box.y + box.h + handleBleed;
 
         if (isDownEvent(event)) {
             if (!inArea && !inBox) {
@@ -751,9 +786,9 @@ function addButton(node, name, callback) {
 }
 
 function randomizePattern(node) {
-    const current = String(widgetValue(node, "pattern_type", "科幻光栅"));
+    const current = String(widgetValue(node, "pattern_type", "渐变光影"));
     if (current === "无" || current === "None") {
-        setWidgetValue(node, "pattern_type", "科幻光栅");
+        setWidgetValue(node, "pattern_type", "渐变光影");
     }
     setWidgetValue(node, "pattern_seed", Math.floor(Math.random() * 2147483647));
 }

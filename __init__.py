@@ -44,6 +44,7 @@ FONT_STYLES = [
     "\u4e2d\u6587\u6807\u9898(\u53ef\u9009)",
 ]
 PATTERN_TYPES = [
+    "\u6e10\u53d8\u5149\u5f71",
     "\u79d1\u5e7b\u5149\u6805",
     "\u65e0",
     "\u5706\u70b9",
@@ -82,6 +83,7 @@ LEGACY_FONT_STYLES = [
     "CJK Display Optional",
 ]
 LEGACY_PATTERN_TYPES = [
+    "Gradient Glow",
     "None",
     "Dots",
     "Diagonal Lines",
@@ -126,6 +128,7 @@ FONT_ALIASES = {
     "\u4e2d\u6587\u6807\u9898(\u53ef\u9009)": "CJK Display Optional",
 }
 PATTERN_ALIASES = {
+    "\u6e10\u53d8\u5149\u5f71": "Gradient Glow",
     "\u65e0": "None",
     "\u5706\u70b9": "Dots",
     "\u659c\u7ebf": "Diagonal Lines",
@@ -428,7 +431,7 @@ def _draw_pattern(base, pattern_type, seed, density, scale_min, scale_max, patte
     if pattern_opacity <= 0:
         return
     if pattern_type == "None":
-        pattern_type = "Sci-Fi Grid"
+        pattern_type = "Gradient Glow"
 
     if bounds:
         x0, y0, x1, y1 = [int(v) for v in bounds]
@@ -449,7 +452,41 @@ def _draw_pattern(base, pattern_type, seed, density, scale_min, scale_max, patte
     min_size = max(2, int(scale_min))
     max_size = max(min_size, int(scale_max))
 
-    if pattern_type == "Dots":
+    if pattern_type == "Gradient Glow":
+        rgb = _parse_color(pattern_color, (255, 255, 255))
+        alpha = _opacity(pattern_opacity)
+        width = max(1, base.width)
+        height = max(1, base.height)
+        for y in range(height):
+            row_alpha = int(alpha * (0.08 + 0.38 * (y / height)))
+            draw.line([(0, y), (width, y)], fill=rgb + (row_alpha,), width=1)
+
+        glow_count = max(3, count)
+        for _ in range(glow_count):
+            cx = rng.randint(0, width)
+            cy = rng.randint(0, height)
+            radius = rng.randint(max(18, min_size * 5), max(24, max_size * 9))
+            for step in range(5, 0, -1):
+                r = int(radius * step / 5)
+                a = max(1, int(alpha * 0.035 * step))
+                draw.ellipse([cx - r, cy - r, cx + r, cy + r], outline=rgb + (a,), width=max(1, r // 18))
+
+        line_count = max(5, count * 2)
+        for _ in range(line_count):
+            length = rng.randint(max(30, min_size * 8), max(42, max_size * 14))
+            x = rng.randint(-length, width)
+            y = rng.randint(0, height + length)
+            drift = rng.randint(length // 4, max(length // 2, length))
+            draw.line([(x, y), (x + length, y - drift)], fill=rgb + (max(1, int(alpha * 0.45)),), width=max(1, max_size // 12))
+
+        block_count = max(4, count)
+        for _ in range(block_count):
+            w = rng.randint(max(20, min_size * 6), max(26, max_size * 12))
+            h = rng.randint(max(3, min_size), max(6, max_size // 2))
+            x = rng.randint(-w // 2, width)
+            y = rng.randint(0, height)
+            draw.rounded_rectangle([x, y, x + w, y + h], radius=max(1, h // 2), fill=rgb + (max(1, int(alpha * 0.5)),))
+    elif pattern_type == "Dots":
         for _ in range(count * 12):
             r = rng.randint(min_size, max_size)
             x = rng.randint(0, base.width)
@@ -568,7 +605,7 @@ class FreeCameraWatermark:
                 "bar_opacity": ("INT", {"default": 100, "min": 0, "max": 255, "step": 1, "tooltip": "兼容旧工作流，新版改用透明度。"}),
                 "bar_height": ("INT", {"default": 90, "min": 0, "max": 1024, "step": 1, "tooltip": "兼容旧工作流，新版用拖拽框高度控制。"}),
                 "logo_opacity": ("INT", {"default": 100, "min": 0, "max": 255, "step": 1, "tooltip": "兼容旧工作流，新版改用统一透明度。"}),
-                "pattern_type": (PATTERN_TYPE_CHOICES, {"default": "\u79d1\u5e7b\u5149\u6805", "tooltip": "\u56fe\u6848\u6837\u5f0f\u3002"}),
+                "pattern_type": (PATTERN_TYPE_CHOICES, {"default": "\u6e10\u53d8\u5149\u5f71", "tooltip": "\u56fe\u6848\u6837\u5f0f\u3002"}),
                 "pattern_color": ("STRING", {"default": "#ffffff", "tooltip": "兼容旧工作流，新版改用主颜色。"}),
                 "pattern_opacity": ("INT", {"default": 32, "min": 0, "max": 255, "step": 1, "tooltip": "兼容旧工作流，新版改用透明度。"}),
                 "pattern_density": ("INT", {"default": 18, "min": 1, "max": 100, "step": 1, "tooltip": "图案数量。"}),
