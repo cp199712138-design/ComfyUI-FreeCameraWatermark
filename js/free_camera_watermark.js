@@ -214,7 +214,7 @@ function layoutMode(node) {
 function ensureModeLayout(node) {
     const modeName = mode(node);
     const savedMode = layoutMode(node);
-    if (savedMode && savedMode !== modeName) {
+    if (savedMode !== modeName) {
         node._fcwLastMode = modeName;
         writeLayout(node, defaultLayoutForMode(modeName, canvasAspect(node)));
         applyCompactVisibility(node);
@@ -239,26 +239,70 @@ function hexColor(value, fallback = "#ffffff") {
     return fallback;
 }
 
-function openNativeColorPicker(node, current, onChange) {
-    const input = document.createElement("input");
-    input.type = "color";
-    input.value = hexColor(current, "#ffffff");
-    input.style.position = "fixed";
-    input.style.left = "-1000px";
-    input.style.top = "-1000px";
-    input.style.width = "1px";
-    input.style.height = "1px";
-    input.style.opacity = "0";
-    input.addEventListener("input", () => onChange(input.value));
-    input.addEventListener("change", () => {
-        onChange(input.value);
-        input.remove();
-    });
-    input.addEventListener("blur", () => setTimeout(() => input.remove(), 250));
-    document.body.appendChild(input);
-    input.click();
-    node.setDirtyCanvas?.(true, true);
-    node.graph?.setDirtyCanvas?.(true, true);
+function hexToRgb(value) {
+    const color = hexColor(value, "#ffffff");
+    return {
+        r: parseInt(color.slice(1, 3), 16),
+        g: parseInt(color.slice(3, 5), 16),
+        b: parseInt(color.slice(5, 7), 16),
+    };
+}
+
+function rgbToHex(r, g, b) {
+    return `#${[r, g, b].map((v) => clamp(Math.round(v), 0, 255).toString(16).padStart(2, "0")).join("")}`;
+}
+
+function rgbToHsv(r, g, b) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    let h = 0;
+    if (delta !== 0) {
+        if (max === r) {
+            h = ((g - b) / delta) % 6;
+        } else if (max === g) {
+            h = (b - r) / delta + 2;
+        } else {
+            h = (r - g) / delta + 4;
+        }
+        h *= 60;
+        if (h < 0) {
+            h += 360;
+        }
+    }
+    return {
+        h,
+        s: max === 0 ? 0 : delta / max,
+        v: max,
+    };
+}
+
+function hsvToRgb(h, s, v) {
+    const c = v * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = v - c;
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    if (h < 60) [r, g, b] = [c, x, 0];
+    else if (h < 120) [r, g, b] = [x, c, 0];
+    else if (h < 180) [r, g, b] = [0, c, x];
+    else if (h < 240) [r, g, b] = [0, x, c];
+    else if (h < 300) [r, g, b] = [x, 0, c];
+    else [r, g, b] = [c, 0, x];
+    return {
+        r: Math.round((r + m) * 255),
+        g: Math.round((g + m) * 255),
+        b: Math.round((b + m) * 255),
+    };
+}
+
+function colorFromHue(h) {
+    const rgb = hsvToRgb(h, 1, 1);
+    return rgbToHex(rgb.r, rgb.g, rgb.b);
 }
 
 function opacityPercent(node) {
@@ -362,7 +406,7 @@ function installColorWidget(node) {
     widget.options = { ...(widget.options || {}), placeholder: "#ffffff" };
     const originalCallback = widget._fcwOriginalColorCallback || widget.callback;
     widget._fcwOriginalColorCallback = originalCallback;
-    if (widget._fcwColorCallbackVersion !== 2) {
+    if (widget._fcwColorCallbackVersion !== 3) {
         widget.callback = (value, canvas, targetNode, pos, event) => {
             widget.value = hexColor(value, "#ffffff");
             const result = originalCallback?.(widget.value, canvas, targetNode, pos, event);
@@ -370,9 +414,11 @@ function installColorWidget(node) {
             node.graph?.setDirtyCanvas?.(true, true);
             return result;
         };
-        widget.computeSize = (width) => [width, 28];
+        widget.computeSize = (width) => [width, 126];
         widget.draw = (ctx, targetNode, widgetWidth, widgetY) => {
             const color = hexColor(widget.value, "#ffffff");
+            const { r, g, b } = hexToRgb(color);
+            const hsv = rgbToHsv(r, g, b);
             const label = widget.label || "主颜色";
             ctx.font = "12px sans-serif";
             const labelWidth = Math.min(88, Math.max(58, ctx.measureText(label).width + 12));
@@ -405,20 +451,130 @@ function installColorWidget(node) {
             ctx.fillStyle = "#ffffff";
             ctx.textAlign = "right";
             ctx.fillText(color, fieldX + fieldW - 10, y + h / 2);
+
+            const panelX = x;
+            const panelY = y + 28;
+            const panelW = Math.min(widgetWidth - 24, 250);
+            const panelH = 48;
+            const hueX = panelX;
+            const hueY = panelY + panelH + 8;
+            const hueW = panelW;
+            const hueH = 12;
+            const rgbY = hueY + hueH + 8;
+            const boxW = 46;
+
+            const sat = ctx.createLinearGradient(panelX, panelY, panelX + panelW, panelY);
+            sat.addColorStop(0, "#ffffff");
+            sat.addColorStop(1, colorFromHue(hsv.h));
+            ctx.fillStyle = sat;
+            ctx.fillRect(panelX, panelY, panelW, panelH);
+            const val = ctx.createLinearGradient(panelX, panelY, panelX, panelY + panelH);
+            val.addColorStop(0, "rgba(0,0,0,0)");
+            val.addColorStop(1, "rgba(0,0,0,1)");
+            ctx.fillStyle = val;
+            ctx.fillRect(panelX, panelY, panelW, panelH);
+            ctx.strokeStyle = "#777";
+            ctx.strokeRect(panelX, panelY, panelW, panelH);
+
+            const pickX = panelX + hsv.s * panelW;
+            const pickY = panelY + (1 - hsv.v) * panelH;
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(pickX, pickY, 5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.strokeStyle = "#111827";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(pickX, pickY, 6, 0, Math.PI * 2);
+            ctx.stroke();
+
+            const hue = ctx.createLinearGradient(hueX, hueY, hueX + hueW, hueY);
+            for (const [stop, stopColor] of [
+                [0, "#ff0000"],
+                [1 / 6, "#ffff00"],
+                [2 / 6, "#00ff00"],
+                [3 / 6, "#00ffff"],
+                [4 / 6, "#0000ff"],
+                [5 / 6, "#ff00ff"],
+                [1, "#ff0000"],
+            ]) {
+                hue.addColorStop(stop, stopColor);
+            }
+            ctx.fillStyle = hue;
+            ctx.fillRect(hueX, hueY, hueW, hueH);
+            ctx.strokeStyle = "#777";
+            ctx.strokeRect(hueX, hueY, hueW, hueH);
+            const hueMarker = hueX + (hsv.h / 360) * hueW;
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(hueMarker, hueY + hueH / 2, 6, 0, Math.PI * 2);
+            ctx.stroke();
+
+            const values = [["R", r], ["G", g], ["B", b]];
+            ctx.font = "10px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            for (let i = 0; i < values.length; i += 1) {
+                const bx = panelX + i * (boxW + 8);
+                ctx.fillStyle = "#333";
+                ctx.fillRect(bx, rgbY, boxW, 18);
+                ctx.strokeStyle = "#888";
+                ctx.strokeRect(bx, rgbY, boxW, 18);
+                ctx.fillStyle = "#ffffff";
+                ctx.fillText(String(values[i][1]), bx + boxW / 2, rgbY + 9);
+                ctx.fillStyle = "#d1d5db";
+                ctx.fillText(values[i][0], bx + boxW / 2, rgbY + 31);
+            }
+
+            widget._fcwColorRects = {
+                sv: { x: panelX, y: panelY, w: panelW, h: panelH },
+                hue: { x: hueX, y: hueY, w: hueW, h: hueH },
+            };
             ctx.restore();
         };
         widget.mouse = (event, pos, targetNode) => {
+            const updateFromPos = (kind, point) => {
+                const rect = widget._fcwColorRects?.[kind];
+                if (!rect) {
+                    return false;
+                }
+                const rgb = hexToRgb(widget.value);
+                const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+                if (kind === "sv") {
+                    hsv.s = clamp((point[0] - rect.x) / rect.w, 0, 1);
+                    hsv.v = clamp(1 - (point[1] - rect.y) / rect.h, 0, 1);
+                } else {
+                    hsv.h = clamp((point[0] - rect.x) / rect.w, 0, 1) * 360;
+                }
+                const next = hsvToRgb(hsv.h, hsv.s, hsv.v);
+                widget.value = rgbToHex(next.r, next.g, next.b);
+                widget.callback?.(widget.value, null, targetNode || node);
+                return true;
+            };
+
+            if (isUpEvent(event)) {
+                widget._fcwColorDrag = null;
+                return true;
+            }
+            if (isMoveEvent(event) && widget._fcwColorDrag) {
+                return updateFromPos(widget._fcwColorDrag, pos);
+            }
             if (!isDownEvent(event)) {
                 return false;
             }
-            openNativeColorPicker(targetNode || node, widget.value, (nextColor) => {
-                widget.value = hexColor(nextColor, "#ffffff");
-                widget.callback?.(widget.value, null, targetNode || node);
-            });
-            return true;
+            for (const kind of ["sv", "hue"]) {
+                const rect = widget._fcwColorRects?.[kind];
+                if (rect && pos[0] >= rect.x && pos[0] <= rect.x + rect.w && pos[1] >= rect.y && pos[1] <= rect.y + rect.h) {
+                    widget._fcwColorDrag = kind;
+                    return updateFromPos(kind, pos);
+                }
+            }
+            return false;
         };
         widget._fcwColorCallbackInstalled = true;
-        widget._fcwColorCallbackVersion = 2;
+        widget._fcwColorCallbackVersion = 3;
     }
 }
 
@@ -719,6 +875,11 @@ class WatermarkTransformWidget {
     }
 
     draw(ctx, node, widgetWidth, widgetY) {
+        const modeName = mode(node);
+        if (this._modeName !== modeName) {
+            this._drag = null;
+            this._modeName = modeName;
+        }
         ensureModeLayout(node);
         const aspect = canvasAspect(node);
         const area = transformArea(widgetWidth, widgetY, aspect);
