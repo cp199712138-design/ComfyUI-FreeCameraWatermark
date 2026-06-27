@@ -305,6 +305,37 @@ function colorFromHue(h) {
     return rgbToHex(rgb.r, rgb.g, rgb.b);
 }
 
+function eventToNodePos(event, node) {
+    if (!event || !node) {
+        return null;
+    }
+    if (Number.isFinite(event.canvasX) && Number.isFinite(event.canvasY)) {
+        return [event.canvasX - (node.pos?.[0] || 0), event.canvasY - (node.pos?.[1] || 0)];
+    }
+    if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) {
+        return null;
+    }
+    const canvas = app?.canvas;
+    const element = canvas?.canvas || canvas?.canvasEl || canvas?.el;
+    const ds = canvas?.ds;
+    if (!element?.getBoundingClientRect || !ds) {
+        return null;
+    }
+    const rect = element.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const graphX = x / (ds.scale || 1) - (ds.offset?.[0] || 0);
+    const graphY = y / (ds.scale || 1) - (ds.offset?.[1] || 0);
+    return [graphX - (node.pos?.[0] || 0), graphY - (node.pos?.[1] || 0)];
+}
+
+function dirtyNode(node) {
+    node?.setDirtyCanvas?.(true, true);
+    node?.graph?.setDirtyCanvas?.(true, true);
+    app?.canvas?.setDirty?.(true, true);
+    app?.graph?.setDirtyCanvas?.(true, true);
+}
+
 function opacityPercent(node) {
     const value = Number(widgetValue(node, "text_opacity", 100));
     return value > 100 ? Math.round((value / 255) * 100) : clamp(value, 0, 100);
@@ -534,7 +565,14 @@ function installColorWidget(node) {
             };
             ctx.restore();
         };
+        widget._fcwStopColorDrag = () => {
+            widget._fcwColorDrag = null;
+            widget._fcwColorDragNode = null;
+            widget._fcwColorAbort?.abort?.();
+            widget._fcwColorAbort = null;
+        };
         widget.mouse = (event, pos, targetNode) => {
+            const activeNode = targetNode || node;
             const updateFromPos = (kind, point) => {
                 const rect = widget._fcwColorRects?.[kind];
                 if (!rect) {
@@ -550,25 +588,49 @@ function installColorWidget(node) {
                 }
                 const next = hsvToRgb(hsv.h, hsv.s, hsv.v);
                 widget.value = rgbToHex(next.r, next.g, next.b);
-                widget.callback?.(widget.value, null, targetNode || node);
+                widget.callback?.(widget.value, null, activeNode);
+                dirtyNode(activeNode);
                 return true;
             };
 
             if (isUpEvent(event)) {
-                widget._fcwColorDrag = null;
+                widget._fcwStopColorDrag();
                 return true;
             }
             if (isMoveEvent(event) && widget._fcwColorDrag) {
-                return updateFromPos(widget._fcwColorDrag, pos);
+                return updateFromPos(widget._fcwColorDrag, eventToNodePos(event, activeNode) || pos);
             }
             if (!isDownEvent(event)) {
                 return false;
             }
+            const point = eventToNodePos(event, activeNode) || pos;
             for (const kind of ["sv", "hue"]) {
                 const rect = widget._fcwColorRects?.[kind];
-                if (rect && pos[0] >= rect.x && pos[0] <= rect.x + rect.w && pos[1] >= rect.y && pos[1] <= rect.y + rect.h) {
+                if (rect && point[0] >= rect.x && point[0] <= rect.x + rect.w && point[1] >= rect.y && point[1] <= rect.y + rect.h) {
                     widget._fcwColorDrag = kind;
-                    return updateFromPos(kind, pos);
+                    widget._fcwColorDragNode = activeNode;
+                    widget._fcwColorAbort?.abort?.();
+                    widget._fcwColorAbort = new AbortController();
+                    const signal = widget._fcwColorAbort.signal;
+                    const move = (moveEvent) => {
+                        const movePoint = eventToNodePos(moveEvent, activeNode);
+                        if (movePoint) {
+                            updateFromPos(kind, movePoint);
+                            moveEvent.preventDefault?.();
+                        }
+                    };
+                    const up = (upEvent) => {
+                        widget._fcwStopColorDrag();
+                        dirtyNode(activeNode);
+                        upEvent.preventDefault?.();
+                    };
+                    document.addEventListener("pointermove", move, { signal, capture: true });
+                    document.addEventListener("mousemove", move, { signal, capture: true });
+                    document.addEventListener("pointerup", up, { signal, capture: true });
+                    document.addEventListener("mouseup", up, { signal, capture: true });
+                    event.preventDefault?.();
+                    event.stopPropagation?.();
+                    return updateFromPos(kind, point);
                 }
             }
             return false;
@@ -626,16 +688,52 @@ function installModeCallback(node) {
         node._fcwLastMode = null;
         resetLayoutForMode(node);
         applyCompactVisibility(node);
-        node.setDirtyCanvas?.(true, true);
-        node.graph?.setDirtyCanvas?.(true, true);
+        dirtyNode(node);
         return result;
     };
     widget._fcwModeCallbackInstalled = true;
     widget._fcwModeCallbackVersion = 3;
 }
 
+function syncModeChange(node, force = false) {
+    const modeName = mode(node);
+    if (!force && node._fcwObservedMode === modeName) {
+        return false;
+    }
+    node._fcwObservedMode = modeName;
+    node._fcwLastMode = null;
+    resetLayoutForMode(node);
+    applyCompactVisibility(node);
+    dirtyNode(node);
+    return true;
+}
+
+function installModeValueWatcher(node) {
+    const widget = findWidget(node, "mode");
+    if (!widget || widget._fcwModeValueWatcherVersion === 1) {
+        return;
+    }
+    let current = widget.value;
+    Object.defineProperty(widget, "value", {
+        configurable: true,
+        enumerable: true,
+        get() {
+            return current;
+        },
+        set(next) {
+            const changed = current !== next;
+            current = next;
+            if (changed && node._fcwModeWatcherReady && !node._fcwSuppressModeWatcher) {
+                setTimeout(() => syncModeChange(node, true), 0);
+            }
+        },
+    });
+    node._fcwObservedMode = mode(node);
+    widget._fcwModeValueWatcherVersion = 1;
+}
+
 function installModeDrawGuard(node) {
-    if (node._fcwModeDrawGuardVersion === 1) {
+    if (node._fcwModeDrawGuardVersion === 2) {
         return;
     }
     const originalDrawForeground = node.onDrawForeground;
@@ -643,7 +741,17 @@ function installModeDrawGuard(node) {
         ensureModeLayout(this);
         return originalDrawForeground?.call(this, ctx, ...args);
     };
-    node._fcwModeDrawGuardVersion = 1;
+    const originalDrawBackground = node.onDrawBackground;
+    node.onDrawBackground = function (ctx, ...args) {
+        ensureModeLayout(this);
+        return originalDrawBackground?.call(this, ctx, ...args);
+    };
+    const originalComputeSize = node.computeSize;
+    node.computeSize = function (...args) {
+        ensureModeLayout(this);
+        return originalComputeSize?.apply(this, args) || this.size;
+    };
+    node._fcwModeDrawGuardVersion = 2;
 }
 
 function transformArea(widgetWidth, widgetY, aspect) {
@@ -1014,6 +1122,7 @@ function addCustomWidgets(node) {
     applyChineseLabels(node);
     installColorWidget(node);
     installModeCallback(node);
+    installModeValueWatcher(node);
     installModeDrawGuard(node);
 
     node.addCustomWidget(new WatermarkTransformWidget());
@@ -1023,6 +1132,7 @@ function addCustomWidgets(node) {
     addButton(node, "适配宽度", fitWidth);
     addButton(node, "随机图案", randomizePattern);
     applyCompactVisibility(node);
+    node._fcwModeWatcherReady = true;
 
     node.serialize_widgets = true;
     const width = Math.max(node.size?.[0] || 330, 380);
