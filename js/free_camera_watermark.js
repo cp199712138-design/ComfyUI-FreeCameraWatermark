@@ -239,6 +239,28 @@ function hexColor(value, fallback = "#ffffff") {
     return fallback;
 }
 
+function openNativeColorPicker(node, current, onChange) {
+    const input = document.createElement("input");
+    input.type = "color";
+    input.value = hexColor(current, "#ffffff");
+    input.style.position = "fixed";
+    input.style.left = "-1000px";
+    input.style.top = "-1000px";
+    input.style.width = "1px";
+    input.style.height = "1px";
+    input.style.opacity = "0";
+    input.addEventListener("input", () => onChange(input.value));
+    input.addEventListener("change", () => {
+        onChange(input.value);
+        input.remove();
+    });
+    input.addEventListener("blur", () => setTimeout(() => input.remove(), 250));
+    document.body.appendChild(input);
+    input.click();
+    node.setDirtyCanvas?.(true, true);
+    node.graph?.setDirtyCanvas?.(true, true);
+}
+
 function opacityPercent(node) {
     const value = Number(widgetValue(node, "text_opacity", 100));
     return value > 100 ? Math.round((value / 255) * 100) : clamp(value, 0, 100);
@@ -335,11 +357,12 @@ function installColorWidget(node) {
     if (!widget) {
         return;
     }
-    widget.type = "color";
+    widget.type = "custom";
     widget.value = hexColor(widget.value, "#ffffff");
     widget.options = { ...(widget.options || {}), placeholder: "#ffffff" };
-    const originalCallback = widget.callback;
-    if (!widget._fcwColorCallbackInstalled) {
+    const originalCallback = widget._fcwOriginalColorCallback || widget.callback;
+    widget._fcwOriginalColorCallback = originalCallback;
+    if (widget._fcwColorCallbackVersion !== 2) {
         widget.callback = (value, canvas, targetNode, pos, event) => {
             widget.value = hexColor(value, "#ffffff");
             const result = originalCallback?.(widget.value, canvas, targetNode, pos, event);
@@ -347,18 +370,63 @@ function installColorWidget(node) {
             node.graph?.setDirtyCanvas?.(true, true);
             return result;
         };
+        widget.computeSize = (width) => [width, 28];
+        widget.draw = (ctx, targetNode, widgetWidth, widgetY) => {
+            const color = hexColor(widget.value, "#ffffff");
+            const label = widget.label || "主颜色";
+            ctx.font = "12px sans-serif";
+            const labelWidth = Math.min(88, Math.max(58, ctx.measureText(label).width + 12));
+            const x = 12;
+            const y = widgetY + 4;
+            const h = 20;
+            const fieldX = x + labelWidth;
+            const fieldW = Math.max(90, widgetWidth - fieldX - 12);
+
+            ctx.save();
+            ctx.font = "12px sans-serif";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "middle";
+            ctx.fillStyle = "#d1d5db";
+            ctx.fillText(label, x, y + h / 2);
+
+            drawRoundRect(ctx, fieldX, y, fieldW, h, 10);
+            ctx.fillStyle = "#2f2f2f";
+            ctx.fill();
+            ctx.strokeStyle = "#777";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            drawRoundRect(ctx, fieldX + 5, y + 4, 20, h - 8, 4);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.strokeStyle = "#d9d9d9";
+            ctx.stroke();
+
+            ctx.fillStyle = "#ffffff";
+            ctx.textAlign = "right";
+            ctx.fillText(color, fieldX + fieldW - 10, y + h / 2);
+            ctx.restore();
+        };
+        widget.mouse = (event, pos, targetNode) => {
+            if (!isDownEvent(event)) {
+                return false;
+            }
+            openNativeColorPicker(targetNode || node, widget.value, (nextColor) => {
+                widget.value = hexColor(nextColor, "#ffffff");
+                widget.callback?.(widget.value, null, targetNode || node);
+            });
+            return true;
+        };
         widget._fcwColorCallbackInstalled = true;
+        widget._fcwColorCallbackVersion = 2;
     }
 }
 
 function applyCompactVisibility(node) {
     const modeName = mode(node);
     const textModes = new Set(["Text", "Logo + Text", "Camera Bar", "Transparent Watermark"]);
-    const visible = new Set(["mode", "text_opacity"]);
+    const visible = new Set(["mode", "text_color", "text_opacity"]);
 
-    if (modeName !== "Logo") {
-        visible.add("text_color");
-    }
     if (textModes.has(modeName)) {
         ["font_style", "line_1", "line_2", "line_3", "font_size"].forEach((name) => visible.add(name));
     }
@@ -391,7 +459,7 @@ function applyCompactVisibility(node) {
 
 function installModeCallback(node) {
     const widget = findWidget(node, "mode");
-    if (!widget || widget._fcwModeCallbackVersion === 2) {
+    if (!widget || widget._fcwModeCallbackVersion === 3) {
         return;
     }
     const originalCallback = widget._fcwOriginalModeCallback || widget.callback;
@@ -402,10 +470,24 @@ function installModeCallback(node) {
         node._fcwLastMode = null;
         resetLayoutForMode(node);
         applyCompactVisibility(node);
+        node.setDirtyCanvas?.(true, true);
+        node.graph?.setDirtyCanvas?.(true, true);
         return result;
     };
     widget._fcwModeCallbackInstalled = true;
-    widget._fcwModeCallbackVersion = 2;
+    widget._fcwModeCallbackVersion = 3;
+}
+
+function installModeDrawGuard(node) {
+    if (node._fcwModeDrawGuardVersion === 1) {
+        return;
+    }
+    const originalDrawForeground = node.onDrawForeground;
+    node.onDrawForeground = function (ctx, ...args) {
+        ensureModeLayout(this);
+        return originalDrawForeground?.call(this, ctx, ...args);
+    };
+    node._fcwModeDrawGuardVersion = 1;
 }
 
 function transformArea(widgetWidth, widgetY, aspect) {
@@ -771,6 +853,7 @@ function addCustomWidgets(node) {
     applyChineseLabels(node);
     installColorWidget(node);
     installModeCallback(node);
+    installModeDrawGuard(node);
 
     node.addCustomWidget(new WatermarkTransformWidget());
     addButton(node, "重置位置", resetLayoutForMode);
