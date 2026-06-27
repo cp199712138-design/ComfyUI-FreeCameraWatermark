@@ -4,8 +4,8 @@ const NODE_NAME = "FreeCameraWatermark";
 const TRANSFORM_WIDGET = "watermark_transform";
 const PALETTE_WIDGET = "watermark_palette";
 const MIN_BOX = 4;
-const CONTROL_HEIGHT = 390;
-const PALETTE_HEIGHT = 54;
+const CONTROL_HEIGHT = 270;
+const PALETTE_HEIGHT = 50;
 
 const MODE_TO_CN = {
     Text: "文字",
@@ -91,6 +91,8 @@ const COLOR_SWATCHES = [
     ["红", "#e53935"],
     ["蓝", "#3b82f6"],
 ];
+
+const OWN_BUTTONS = new Set(["重置位置", "居中", "底部", "适配宽度", "随机图案"]);
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -390,7 +392,7 @@ function transformArea(widgetWidth, widgetY, aspect) {
     const margin = 12;
     const header = 24;
     const maxW = Math.max(120, widgetWidth - margin * 2);
-    const maxH = 300;
+    const maxH = 185;
     let width = maxW;
     let height = width / aspect;
     if (height > maxH) {
@@ -767,9 +769,7 @@ function fitWidth(node) {
 }
 
 function addCustomWidgets(node) {
-    if (node.widgets?.some((widget) => widget?.name === TRANSFORM_WIDGET)) {
-        return;
-    }
+    node.widgets = (node.widgets || []).filter((widget) => widget?.name !== TRANSFORM_WIDGET && widget?.name !== PALETTE_WIDGET && !OWN_BUTTONS.has(widget?.name));
     localizeWidgetValues(node);
     localizeComboChoices(node);
     applyChineseLabels(node);
@@ -786,7 +786,7 @@ function addCustomWidgets(node) {
 
     node.serialize_widgets = true;
     const width = Math.max(node.size?.[0] || 330, 380);
-    const height = Math.max(node.size?.[1] || 360, 600);
+    const height = Math.max(node.size?.[1] || 360, 480);
     node.setSize?.([width, height]);
 }
 
