@@ -2,10 +2,8 @@ import { app } from "/scripts/app.js";
 
 const NODE_NAME = "FreeCameraWatermark";
 const TRANSFORM_WIDGET = "watermark_transform";
-const PALETTE_WIDGET = "watermark_palette";
 const MIN_BOX = 4;
 const CONTROL_HEIGHT = 270;
-const PALETTE_HEIGHT = 50;
 
 const MODE_TO_CN = {
     Text: "文字",
@@ -83,15 +81,6 @@ const LABELS = {
     pattern_scale_min: "最小尺寸",
     pattern_scale_max: "最大尺寸",
 };
-
-const COLOR_SWATCHES = [
-    ["白", "#ffffff"],
-    ["黑", "#000000"],
-    ["灰", "#888888"],
-    ["金", "#d9a441"],
-    ["红", "#e53935"],
-    ["蓝", "#3b82f6"],
-];
 
 const OWN_BUTTONS = new Set(["重置位置", "居中", "底部", "适配宽度", "随机图案"]);
 
@@ -224,9 +213,15 @@ function layoutMode(node) {
 
 function ensureModeLayout(node) {
     const modeName = mode(node);
-    if (node._fcwLastMode !== modeName || layoutMode(node) !== modeName) {
+    const savedMode = layoutMode(node);
+    if (savedMode && savedMode !== modeName) {
         node._fcwLastMode = modeName;
         writeLayout(node, defaultLayoutForMode(modeName, canvasAspect(node)));
+        applyCompactVisibility(node);
+        return true;
+    }
+    if (node._fcwLastMode !== modeName) {
+        node._fcwLastMode = modeName;
         applyCompactVisibility(node);
         return true;
     }
@@ -335,6 +330,27 @@ function applyChineseLabels(node) {
     }
 }
 
+function installColorWidget(node) {
+    const widget = findWidget(node, "text_color");
+    if (!widget) {
+        return;
+    }
+    widget.type = "color";
+    widget.value = hexColor(widget.value, "#ffffff");
+    widget.options = { ...(widget.options || {}), placeholder: "#ffffff" };
+    const originalCallback = widget.callback;
+    if (!widget._fcwColorCallbackInstalled) {
+        widget.callback = (value, canvas, targetNode, pos, event) => {
+            widget.value = hexColor(value, "#ffffff");
+            const result = originalCallback?.(widget.value, canvas, targetNode, pos, event);
+            node.setDirtyCanvas?.(true, true);
+            node.graph?.setDirtyCanvas?.(true, true);
+            return result;
+        };
+        widget._fcwColorCallbackInstalled = true;
+    }
+}
+
 function applyCompactVisibility(node) {
     const modeName = mode(node);
     const textModes = new Set(["Text", "Logo + Text", "Camera Bar", "Transparent Watermark"]);
@@ -364,7 +380,7 @@ function applyCompactVisibility(node) {
     ]);
 
     for (const widget of node.widgets || []) {
-        if (!widget?.name || widget.name === TRANSFORM_WIDGET || widget.name === PALETTE_WIDGET || widget.type === "button") {
+        if (!widget?.name || widget.name === TRANSFORM_WIDGET || widget.type === "button") {
             continue;
         }
         setWidgetHidden(widget, alwaysHidden.has(widget.name) || !visible.has(widget.name));
@@ -375,11 +391,13 @@ function applyCompactVisibility(node) {
 
 function installModeCallback(node) {
     const widget = findWidget(node, "mode");
-    if (!widget || widget._fcwModeCallbackInstalled) {
+    if (!widget || widget._fcwModeCallbackVersion === 2) {
         return;
     }
-    const originalCallback = widget.callback;
+    const originalCallback = widget._fcwOriginalModeCallback || widget.callback;
+    widget._fcwOriginalModeCallback = originalCallback;
     widget.callback = (value, canvas, targetNode, pos, event) => {
+        widget.value = value;
         const result = originalCallback?.(value, canvas, targetNode, pos, event);
         node._fcwLastMode = null;
         resetLayoutForMode(node);
@@ -387,6 +405,7 @@ function installModeCallback(node) {
         return result;
     };
     widget._fcwModeCallbackInstalled = true;
+    widget._fcwModeCallbackVersion = 2;
 }
 
 function transformArea(widgetWidth, widgetY, aspect) {
@@ -603,64 +622,6 @@ function drawModePreview(ctx, node, box) {
     ctx.restore();
 }
 
-class ColorPaletteWidget {
-    constructor() {
-        this.name = PALETTE_WIDGET;
-        this.type = "custom";
-        this.value = "";
-        this._swatches = [];
-    }
-
-    computeSize(width) {
-        return [width, PALETTE_HEIGHT];
-    }
-
-    draw(ctx, node, widgetWidth, widgetY) {
-        const modeName = mode(node);
-        const current = hexColor(widgetValue(node, "text_color", "#ffffff"));
-        const muted = modeName === "Logo";
-        this._swatches = [];
-
-        ctx.save();
-        ctx.font = "12px sans-serif";
-        ctx.fillStyle = muted ? "#8b949e" : "#d1d5db";
-        ctx.fillText(muted ? "Logo 保留原色，颜色不改变 Logo" : "常用色", 12, widgetY + 14);
-
-        let x = 12;
-        for (const [label, color] of COLOR_SWATCHES) {
-            const box = { x, y: widgetY + 24, w: 32, h: 22, color };
-            this._swatches.push(box);
-            ctx.globalAlpha = muted ? 0.35 : 1;
-            ctx.fillStyle = color;
-            ctx.fillRect(box.x, box.y, box.w, box.h);
-            ctx.strokeStyle = current === color ? "#60a5fa" : "#4b5563";
-            ctx.lineWidth = current === color ? 2 : 1;
-            ctx.strokeRect(box.x, box.y, box.w, box.h);
-            ctx.fillStyle = color === "#000000" ? "#ffffff" : "#111827";
-            ctx.font = "10px sans-serif";
-            ctx.textAlign = "center";
-            ctx.fillText(label, box.x + box.w / 2, box.y + 15);
-            x += 38;
-        }
-        ctx.restore();
-    }
-
-    mouse(event, pos, node) {
-        if (mode(node) === "Logo") {
-            return false;
-        }
-        if (!isDownEvent(event)) {
-            return false;
-        }
-        const hit = this._swatches.find((box) => pos[0] >= box.x && pos[0] <= box.x + box.w && pos[1] >= box.y && pos[1] <= box.y + box.h);
-        if (!hit) {
-            return false;
-        }
-        setWidgetValue(node, "text_color", hit.color);
-        return true;
-    }
-}
-
 class WatermarkTransformWidget {
     constructor() {
         this.name = TRANSFORM_WIDGET;
@@ -804,13 +765,13 @@ function fitWidth(node) {
 }
 
 function addCustomWidgets(node) {
-    node.widgets = (node.widgets || []).filter((widget) => widget?.name !== TRANSFORM_WIDGET && widget?.name !== PALETTE_WIDGET && !OWN_BUTTONS.has(widget?.name));
+    node.widgets = (node.widgets || []).filter((widget) => widget?.name !== TRANSFORM_WIDGET && !OWN_BUTTONS.has(widget?.name));
     localizeWidgetValues(node);
     localizeComboChoices(node);
     applyChineseLabels(node);
+    installColorWidget(node);
     installModeCallback(node);
 
-    node.addCustomWidget(new ColorPaletteWidget());
     node.addCustomWidget(new WatermarkTransformWidget());
     addButton(node, "重置位置", resetLayoutForMode);
     addButton(node, "居中", (target) => writeLayout(target, { ...readLayout(target), x: 50, y: 50 }));
