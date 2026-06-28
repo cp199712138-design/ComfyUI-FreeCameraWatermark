@@ -351,10 +351,10 @@ def _resolve_layout(layout_json, mode, width, height):
             return layout
         layout.update({k: saved[k] for k in ("x", "y", "w", "h", "layout") if k in saved})
 
-    layout["x"] = _clamp(float(layout.get("x", 50)), 0.0, 100.0)
-    layout["y"] = _clamp(float(layout.get("y", 88)), 0.0, 100.0)
     layout["w"] = _clamp(float(layout.get("w", 55)), 2.0, 100.0)
     layout["h"] = _clamp(float(layout.get("h", 16)), 2.0, 100.0)
+    layout["x"] = _clamp(float(layout.get("x", 50)), layout["w"] / 2.0, 100.0 - layout["w"] / 2.0)
+    layout["y"] = _clamp(float(layout.get("y", 88)), layout["h"] / 2.0, 100.0 - layout["h"] / 2.0)
     return layout
 
 

@@ -137,7 +137,7 @@ function readLayout(node) {
     if (saved.mode && savedMode !== mode) {
         return fallback;
     }
-    return {
+    return normalizeLayout({
         ...fallback,
         x: Number.isFinite(Number(saved.x)) ? Number(saved.x) : fallback.x,
         y: Number.isFinite(Number(saved.y)) ? Number(saved.y) : fallback.y,
@@ -146,19 +146,33 @@ function readLayout(node) {
         layout: typeof saved.layout === "string" ? saved.layout : fallback.layout,
         aspect: Number.isFinite(Number(saved.aspect)) ? Number(saved.aspect) : fallback.aspect,
         mode,
+    });
+}
+
+function normalizeLayout(layout) {
+    const w = round(clamp(Number(layout.w), MIN_BOX, 100));
+    const h = round(clamp(Number(layout.h), MIN_BOX, 100));
+    const halfW = w / 2;
+    const halfH = h / 2;
+    return {
+        ...layout,
+        x: round(clamp(Number(layout.x), halfW, 100 - halfW)),
+        y: round(clamp(Number(layout.y), halfH, 100 - halfH)),
+        w,
+        h,
     };
 }
 
 function writeLayout(node, layout) {
-    const next = {
+    const next = normalizeLayout({
         mode: canonicalMode(layout.mode || getWidgetValue(node, "mode", "相机白条")),
-        x: round(clamp(Number(layout.x), 0, 100)),
-        y: round(clamp(Number(layout.y), 0, 100)),
-        w: round(clamp(Number(layout.w), MIN_BOX, 100)),
-        h: round(clamp(Number(layout.h), MIN_BOX, 100)),
+        x: layout.x,
+        y: layout.y,
+        w: layout.w,
+        h: layout.h,
         layout: layout.layout || "Text Only",
         aspect: Number.isFinite(Number(layout.aspect)) ? Number(layout.aspect) : imageAspect(node),
-    };
+    });
     setWidgetValue(node, "layout_json", JSON.stringify(next), false);
     dirtyNode(node);
 }
