@@ -1,88 +1,39 @@
 import { app } from "/scripts/app.js";
 
 const NODE_NAME = "FreeCameraWatermark";
-const TRANSFORM_WIDGET = "watermark_transform";
+const DOM_WIDGET = "fcw_dom_panel";
 const MIN_BOX = 4;
-const CONTROL_HEIGHT = 270;
 
-const MODE_TO_CN = {
-    Text: "文字",
-    Logo: "Logo",
-    "Logo + Text": "Logo+文字",
-    "Camera Bar": "相机白条",
-    "Transparent Watermark": "透明水印",
-    "Pattern Watermark": "图案水印",
+const MODES = ["文字", "Logo", "Logo+文字", "相机白条", "透明水印", "图案水印"];
+const MODE_TO_EN = {
+    "文字": "Text",
+    "Logo": "Logo",
+    "Logo+文字": "Logo + Text",
+    "相机白条": "Camera Bar",
+    "透明水印": "Transparent Watermark",
+    "图案水印": "Pattern Watermark",
 };
+const EN_TO_MODE = Object.fromEntries(Object.entries(MODE_TO_EN).map(([key, value]) => [value, key]));
 
-const PRESET_TO_CN = {
-    Auto: "自动",
-    "Bottom Camera Bar": "底部白条",
-    "Minimal Bottom Caption": "底部小字",
-    "Center Transparent Text": "居中文字",
-    "Tiled Transparent Logo": "平铺Logo",
-    "Bottom Right Logo": "右下Logo",
-    "Logo Left + Text Right": "Logo左文字右",
-    "Soft Pattern Overlay": "柔和图案",
-    "Signature Center": "居中签名",
-    Custom: "自定义",
-};
+const FONT_STYLES = ["默认", "手写", "优雅", "科技", "中文系统", "中文手写(可选)", "中文标题(可选)"];
+const PATTERNS = ["渐变光影", "科幻光栅", "圆点", "斜线", "波纹", "星光", "色块", "无"];
 
-const FONT_TO_CN = {
-    "System Default": "默认",
-    Signature: "手写",
-    Editorial: "优雅",
-    Tech: "科技",
-    "CJK System": "中文系统",
-    "CJK Handwritten Optional": "中文手写(可选)",
-    "CJK Display Optional": "中文标题(可选)",
-};
-
-const PATTERN_TO_CN = {
-    "Gradient Glow": "渐变光影",
-    "Sci-Fi Grid": "科幻光栅",
-    None: "无",
-    Dots: "圆点",
-    "Diagonal Lines": "斜线",
-    "Soft Waves": "波纹",
-    "Tiny Stars": "星光",
-    "Gradient Blocks": "色块",
-};
-
-const MODE_TO_EN = Object.fromEntries(Object.entries(MODE_TO_CN).map(([key, value]) => [value, key]));
-const CN_CHOICES = {
-    mode: Object.values(MODE_TO_CN),
-    preset: Object.values(PRESET_TO_CN),
-    font_style: Object.values(FONT_TO_CN),
-    pattern_type: Object.values(PATTERN_TO_CN),
-};
-
-const LABELS = {
-    mode: "模式",
-    preset: "位置预设",
-    font_style: "字体",
-    layout_json: "拖拽位置",
-    auto_adapt: "自动适配",
-    safe_margin: "安全边距",
-    line_1: "文字1",
-    line_2: "文字2",
-    line_3: "文字3",
-    font_size: "字号",
-    text_color: "主颜色",
-    text_opacity: "透明度",
-    bar_color: "旧版白条颜色",
-    bar_opacity: "旧版白条透明度",
-    bar_height: "旧版白条高度",
-    logo_opacity: "旧版Logo透明度",
-    pattern_type: "图案",
-    pattern_color: "旧版图案颜色",
-    pattern_opacity: "旧版图案透明度",
-    pattern_density: "图案密度",
-    pattern_seed: "随机种子",
-    pattern_scale_min: "最小尺寸",
-    pattern_scale_max: "最大尺寸",
-};
-
-const OWN_BUTTONS = new Set(["重置位置", "居中", "底部", "适配宽度", "随机图案"]);
+const CONTROLLED_WIDGETS = new Set([
+    "mode",
+    "font_style",
+    "layout_json",
+    "line_1",
+    "line_2",
+    "line_3",
+    "font_size",
+    "text_color",
+    "text_opacity",
+    "pattern_type",
+    "pattern_density",
+    "pattern_seed",
+    "pattern_scale_min",
+    "pattern_scale_max",
+]);
 
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
@@ -97,135 +48,31 @@ function findWidget(node, name) {
     return node.widgets?.find((widget) => widget?.name === name);
 }
 
-function widgetValue(node, name, fallback) {
+function dirtyNode(node) {
+    node?.setDirtyCanvas?.(true, true);
+    node?.graph?.setDirtyCanvas?.(true, true);
+    app?.canvas?.setDirty?.(true, true);
+}
+
+function getWidgetValue(node, name, fallback) {
     const widget = findWidget(node, name);
     return widget?.value ?? fallback;
 }
 
-function setWidgetValue(node, name, value) {
+function setWidgetValue(node, name, value, callCallback = true) {
     const widget = findWidget(node, name);
     if (!widget) {
         return;
     }
     widget.value = value;
-    widget.callback?.(value, null, node);
-    node.setDirtyCanvas?.(true, true);
-    node.graph?.setDirtyCanvas?.(true, true);
-}
-
-function mode(node) {
-    const value = String(widgetValue(node, "mode", "相机白条"));
-    return MODE_TO_EN[value] || value;
-}
-
-const PATTERN_TO_EN = Object.fromEntries(Object.entries(PATTERN_TO_CN).map(([key, value]) => [value, key]));
-
-function patternType(node) {
-    const value = String(widgetValue(node, "pattern_type", "渐变光影"));
-    return PATTERN_TO_EN[value] || value;
-}
-
-function defaultLayoutName(modeName) {
-    if (modeName === "Logo") {
-        return "Logo Only";
-    }
-    if (modeName === "Logo + Text") {
-        return "Logo Left";
-    }
-    if (modeName === "Pattern Watermark") {
-        return "Pattern Only";
-    }
-    return "Text Only Bar";
-}
-
-function defaultLayoutForMode(modeName, aspect = 9 / 16) {
-    if (modeName === "Logo") {
-        return { x: 50, y: 50, w: 42, h: aspect < 0.8 ? 16 : 24, layout: "Logo Only", aspect };
-    }
-    if (modeName === "Logo + Text") {
-        return { x: 50, y: 86, w: 72, h: aspect < 0.8 ? 10 : 14, layout: "Logo Left", aspect };
-    }
-    if (modeName === "Transparent Watermark") {
-        return { x: 50, y: 50, w: 72, h: 16, layout: "Text Only", aspect };
-    }
-    if (modeName === "Pattern Watermark") {
-        return { x: 50, y: 50, w: 100, h: 100, layout: "Pattern Only", aspect };
-    }
-    if (modeName === "Text") {
-        return { x: 50, y: 88, w: 74, h: 10, layout: "Text Only", aspect };
-    }
-    return { x: 50, y: 91, w: 86, h: 12, layout: "Text Only Bar", aspect };
-}
-
-function readLayout(node) {
-    const modeName = mode(node);
-    const fallback = defaultLayoutForMode(modeName, canvasAspect(node));
-    const raw = widgetValue(node, "layout_json", "{}");
-    try {
-        const parsed = JSON.parse(raw || "{}");
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-            if (parsed.mode && parsed.mode !== modeName) {
-                return fallback;
-            }
-            return {
-                x: Number.isFinite(Number(parsed.x)) ? Number(parsed.x) : fallback.x,
-                y: Number.isFinite(Number(parsed.y)) ? Number(parsed.y) : fallback.y,
-                w: Number.isFinite(Number(parsed.w)) ? Number(parsed.w) : fallback.w,
-                h: Number.isFinite(Number(parsed.h)) ? Number(parsed.h) : fallback.h,
-                layout: typeof parsed.layout === "string" ? parsed.layout : fallback.layout,
-                aspect: Number.isFinite(Number(parsed.aspect)) ? Number(parsed.aspect) : fallback.aspect,
-                mode: modeName,
-            };
-        }
-    } catch {
-        // Invalid hand-edited JSON should not break the node UI.
-    }
-    return fallback;
-}
-
-function writeLayout(node, next) {
-    const aspect = canvasAspect(node);
-    const modeName = mode(node);
-    const layout = {
-        x: round(clamp(Number(next.x), 0, 100)),
-        y: round(clamp(Number(next.y), 0, 100)),
-        w: round(clamp(Number(next.w), MIN_BOX, 100)),
-        h: round(clamp(Number(next.h), MIN_BOX, 100)),
-        layout: next.layout || defaultLayoutName(modeName),
-        mode: modeName,
-        aspect,
-    };
-    setWidgetValue(node, "layout_json", JSON.stringify(layout));
-}
-
-function resetLayoutForMode(node) {
-    writeLayout(node, defaultLayoutForMode(mode(node), canvasAspect(node)));
-}
-
-function layoutMode(node) {
-    try {
-        const parsed = JSON.parse(widgetValue(node, "layout_json", "{}") || "{}");
-        return typeof parsed.mode === "string" ? parsed.mode : null;
-    } catch {
-        return null;
+    if (callCallback) {
+        widget.callback?.(value, null, node);
     }
 }
 
-function ensureModeLayout(node) {
-    const modeName = mode(node);
-    const savedMode = layoutMode(node);
-    if (savedMode !== modeName) {
-        node._fcwLastMode = modeName;
-        writeLayout(node, defaultLayoutForMode(modeName, canvasAspect(node)));
-        applyCompactVisibility(node);
-        return true;
-    }
-    if (node._fcwLastMode !== modeName) {
-        node._fcwLastMode = modeName;
-        applyCompactVisibility(node);
-        return true;
-    }
-    return false;
+function canonicalMode(value) {
+    const raw = String(value || "相机白条");
+    return EN_TO_MODE[raw] || raw;
 }
 
 function hexColor(value, fallback = "#ffffff") {
@@ -239,905 +86,497 @@ function hexColor(value, fallback = "#ffffff") {
     return fallback;
 }
 
-function hexToRgb(value) {
-    const color = hexColor(value, "#ffffff");
-    return {
-        r: parseInt(color.slice(1, 3), 16),
-        g: parseInt(color.slice(3, 5), 16),
-        b: parseInt(color.slice(5, 7), 16),
-    };
-}
-
-function rgbToHex(r, g, b) {
-    return `#${[r, g, b].map((v) => clamp(Math.round(v), 0, 255).toString(16).padStart(2, "0")).join("")}`;
-}
-
-function rgbToHsv(r, g, b) {
-    r /= 255;
-    g /= 255;
-    b /= 255;
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const delta = max - min;
-    let h = 0;
-    if (delta !== 0) {
-        if (max === r) {
-            h = ((g - b) / delta) % 6;
-        } else if (max === g) {
-            h = (b - r) / delta + 2;
-        } else {
-            h = (r - g) / delta + 4;
-        }
-        h *= 60;
-        if (h < 0) {
-            h += 360;
-        }
-    }
-    return {
-        h,
-        s: max === 0 ? 0 : delta / max,
-        v: max,
-    };
-}
-
-function hsvToRgb(h, s, v) {
-    const c = v * s;
-    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-    const m = v - c;
-    let r = 0;
-    let g = 0;
-    let b = 0;
-    if (h < 60) [r, g, b] = [c, x, 0];
-    else if (h < 120) [r, g, b] = [x, c, 0];
-    else if (h < 180) [r, g, b] = [0, c, x];
-    else if (h < 240) [r, g, b] = [0, x, c];
-    else if (h < 300) [r, g, b] = [x, 0, c];
-    else [r, g, b] = [c, 0, x];
-    return {
-        r: Math.round((r + m) * 255),
-        g: Math.round((g + m) * 255),
-        b: Math.round((b + m) * 255),
-    };
-}
-
-function colorFromHue(h) {
-    const rgb = hsvToRgb(h, 1, 1);
-    return rgbToHex(rgb.r, rgb.g, rgb.b);
-}
-
-function eventToNodePos(event, node) {
-    if (!event || !node) {
-        return null;
-    }
-    if (Number.isFinite(event.canvasX) && Number.isFinite(event.canvasY)) {
-        return [event.canvasX - (node.pos?.[0] || 0), event.canvasY - (node.pos?.[1] || 0)];
-    }
-    if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) {
-        return null;
-    }
-    const canvas = app?.canvas;
-    const element = canvas?.canvas || canvas?.canvasEl || canvas?.el;
-    const ds = canvas?.ds;
-    if (!element?.getBoundingClientRect || !ds) {
-        return null;
-    }
-    const rect = element.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    const graphX = x / (ds.scale || 1) - (ds.offset?.[0] || 0);
-    const graphY = y / (ds.scale || 1) - (ds.offset?.[1] || 0);
-    return [graphX - (node.pos?.[0] || 0), graphY - (node.pos?.[1] || 0)];
-}
-
-function dirtyNode(node) {
-    node?.setDirtyCanvas?.(true, true);
-    node?.graph?.setDirtyCanvas?.(true, true);
-    app?.canvas?.setDirty?.(true, true);
-    app?.graph?.setDirtyCanvas?.(true, true);
-}
-
-function opacityPercent(node) {
-    const value = Number(widgetValue(node, "text_opacity", 100));
-    return value > 100 ? Math.round((value / 255) * 100) : clamp(value, 0, 100);
-}
-
-function canvasAspect(node) {
-    refreshAspectFromImgs(node);
-    return node._fcwAspect || readAspectFromLayout(node) || 9 / 16;
-}
-
-function readAspectFromLayout(node) {
-    try {
-        const parsed = JSON.parse(widgetValue(node, "layout_json", "{}") || "{}");
-        const aspect = Number(parsed.aspect);
-        return Number.isFinite(aspect) && aspect > 0 ? aspect : null;
-    } catch {
-        return null;
-    }
-}
-
-function refreshAspectFromImgs(node) {
+function imageAspect(node) {
     const img = node?.imgs?.[0];
     const width = img?.naturalWidth || img?.width;
     const height = img?.naturalHeight || img?.height;
-    if (width > 0 && height > 0) {
-        node._fcwAspect = width / height;
+    if (width && height) {
+        return width / height;
+    }
+    const layout = readRawLayout(node);
+    if (layout.aspect && Number.isFinite(Number(layout.aspect))) {
+        return Number(layout.aspect);
+    }
+    return 9 / 16;
+}
+
+function defaultLayout(mode, aspect = 9 / 16) {
+    const layoutName = mode === "Logo" ? "Logo Only" : mode === "Logo+文字" ? "Logo Left" : mode === "图案水印" ? "Pattern Only" : "Text Only";
+    if (mode === "Logo") {
+        return { mode, x: 50, y: 50, w: 42, h: aspect < 0.8 ? 16 : 24, layout: layoutName, aspect };
+    }
+    if (mode === "Logo+文字") {
+        return { mode, x: 50, y: 86, w: 72, h: aspect < 0.8 ? 10 : 14, layout: layoutName, aspect };
+    }
+    if (mode === "透明水印") {
+        return { mode, x: 50, y: 50, w: 72, h: 16, layout: layoutName, aspect };
+    }
+    if (mode === "图案水印") {
+        return { mode, x: 50, y: 50, w: 100, h: 100, layout: layoutName, aspect };
+    }
+    if (mode === "文字") {
+        return { mode, x: 50, y: 88, w: 74, h: 10, layout: layoutName, aspect };
+    }
+    return { mode, x: 50, y: 91, w: 86, h: 12, layout: "Text Only Bar", aspect };
+}
+
+function readRawLayout(node) {
+    try {
+        const parsed = JSON.parse(getWidgetValue(node, "layout_json", "{}") || "{}");
+        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+        return {};
     }
 }
 
-function drawRoundRect(ctx, x, y, width, height, radius) {
-    const r = Math.min(radius, width / 2, height / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + width - r, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + r);
-    ctx.lineTo(x + width, y + height - r);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-    ctx.lineTo(x + r, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-}
-
-function setWidgetHidden(widget, hidden) {
-    if (!widget) {
-        return;
+function readLayout(node) {
+    const mode = canonicalMode(getWidgetValue(node, "mode", "相机白条"));
+    const fallback = defaultLayout(mode, imageAspect(node));
+    const saved = readRawLayout(node);
+    const savedMode = canonicalMode(saved.mode || mode);
+    if (saved.mode && savedMode !== mode) {
+        return fallback;
     }
-    if (!widget._fcwOriginalComputeSize) {
-        widget._fcwOriginalComputeSize = widget.computeSize;
-    }
-    if (!widget._fcwOriginalType) {
-        widget._fcwOriginalType = widget.type;
-    }
-    widget.hidden = hidden;
-    widget.type = hidden ? "hidden" : widget._fcwOriginalType;
-    widget.computeSize = hidden ? () => [0, -4] : widget._fcwOriginalComputeSize;
-    widget.serialize = true;
-}
-
-function migrateWidgetValue(node, name, mapping) {
-    const widget = findWidget(node, name);
-    if (widget && Object.hasOwn(mapping, widget.value)) {
-        setWidgetValue(node, name, mapping[widget.value]);
-    }
-}
-
-function localizeWidgetValues(node) {
-    migrateWidgetValue(node, "mode", MODE_TO_CN);
-    migrateWidgetValue(node, "preset", PRESET_TO_CN);
-    migrateWidgetValue(node, "font_style", FONT_TO_CN);
-    migrateWidgetValue(node, "pattern_type", PATTERN_TO_CN);
-}
-
-function localizeComboChoices(node) {
-    for (const [name, values] of Object.entries(CN_CHOICES)) {
-        const widget = findWidget(node, name);
-        if (widget?.options?.values) {
-            widget.options.values = values;
-        }
-    }
-}
-
-function applyChineseLabels(node) {
-    for (const widget of node.widgets || []) {
-        if (LABELS[widget.name]) {
-            widget.label = LABELS[widget.name];
-        }
-    }
-}
-
-function installColorWidget(node) {
-    const widget = findWidget(node, "text_color");
-    if (!widget) {
-        return;
-    }
-    widget.type = "custom";
-    widget.value = hexColor(widget.value, "#ffffff");
-    widget.options = { ...(widget.options || {}), placeholder: "#ffffff" };
-    const originalCallback = widget._fcwOriginalColorCallback || widget.callback;
-    widget._fcwOriginalColorCallback = originalCallback;
-    if (widget._fcwColorCallbackVersion !== 3) {
-        widget.callback = (value, canvas, targetNode, pos, event) => {
-            widget.value = hexColor(value, "#ffffff");
-            const result = originalCallback?.(widget.value, canvas, targetNode, pos, event);
-            node.setDirtyCanvas?.(true, true);
-            node.graph?.setDirtyCanvas?.(true, true);
-            return result;
-        };
-        widget.computeSize = (width) => [width, 126];
-        widget.draw = (ctx, targetNode, widgetWidth, widgetY) => {
-            const color = hexColor(widget.value, "#ffffff");
-            const { r, g, b } = hexToRgb(color);
-            const hsv = rgbToHsv(r, g, b);
-            const label = widget.label || "主颜色";
-            ctx.font = "12px sans-serif";
-            const labelWidth = Math.min(88, Math.max(58, ctx.measureText(label).width + 12));
-            const x = 12;
-            const y = widgetY + 4;
-            const h = 20;
-            const fieldX = x + labelWidth;
-            const fieldW = Math.max(90, widgetWidth - fieldX - 12);
-
-            ctx.save();
-            ctx.font = "12px sans-serif";
-            ctx.textAlign = "left";
-            ctx.textBaseline = "middle";
-            ctx.fillStyle = "#d1d5db";
-            ctx.fillText(label, x, y + h / 2);
-
-            drawRoundRect(ctx, fieldX, y, fieldW, h, 10);
-            ctx.fillStyle = "#2f2f2f";
-            ctx.fill();
-            ctx.strokeStyle = "#777";
-            ctx.lineWidth = 1;
-            ctx.stroke();
-
-            drawRoundRect(ctx, fieldX + 5, y + 4, 20, h - 8, 4);
-            ctx.fillStyle = color;
-            ctx.fill();
-            ctx.strokeStyle = "#d9d9d9";
-            ctx.stroke();
-
-            ctx.fillStyle = "#ffffff";
-            ctx.textAlign = "right";
-            ctx.fillText(color, fieldX + fieldW - 10, y + h / 2);
-
-            const panelX = x;
-            const panelY = y + 28;
-            const panelW = Math.min(widgetWidth - 24, 250);
-            const panelH = 48;
-            const hueX = panelX;
-            const hueY = panelY + panelH + 8;
-            const hueW = panelW;
-            const hueH = 12;
-            const rgbY = hueY + hueH + 8;
-            const boxW = 46;
-
-            const sat = ctx.createLinearGradient(panelX, panelY, panelX + panelW, panelY);
-            sat.addColorStop(0, "#ffffff");
-            sat.addColorStop(1, colorFromHue(hsv.h));
-            ctx.fillStyle = sat;
-            ctx.fillRect(panelX, panelY, panelW, panelH);
-            const val = ctx.createLinearGradient(panelX, panelY, panelX, panelY + panelH);
-            val.addColorStop(0, "rgba(0,0,0,0)");
-            val.addColorStop(1, "rgba(0,0,0,1)");
-            ctx.fillStyle = val;
-            ctx.fillRect(panelX, panelY, panelW, panelH);
-            ctx.strokeStyle = "#777";
-            ctx.strokeRect(panelX, panelY, panelW, panelH);
-
-            const pickX = panelX + hsv.s * panelW;
-            const pickY = panelY + (1 - hsv.v) * panelH;
-            ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(pickX, pickY, 5, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.strokeStyle = "#111827";
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.arc(pickX, pickY, 6, 0, Math.PI * 2);
-            ctx.stroke();
-
-            const hue = ctx.createLinearGradient(hueX, hueY, hueX + hueW, hueY);
-            for (const [stop, stopColor] of [
-                [0, "#ff0000"],
-                [1 / 6, "#ffff00"],
-                [2 / 6, "#00ff00"],
-                [3 / 6, "#00ffff"],
-                [4 / 6, "#0000ff"],
-                [5 / 6, "#ff00ff"],
-                [1, "#ff0000"],
-            ]) {
-                hue.addColorStop(stop, stopColor);
-            }
-            ctx.fillStyle = hue;
-            ctx.fillRect(hueX, hueY, hueW, hueH);
-            ctx.strokeStyle = "#777";
-            ctx.strokeRect(hueX, hueY, hueW, hueH);
-            const hueMarker = hueX + (hsv.h / 360) * hueW;
-            ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(hueMarker, hueY + hueH / 2, 6, 0, Math.PI * 2);
-            ctx.stroke();
-
-            const values = [["R", r], ["G", g], ["B", b]];
-            ctx.font = "10px sans-serif";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            for (let i = 0; i < values.length; i += 1) {
-                const bx = panelX + i * (boxW + 8);
-                ctx.fillStyle = "#333";
-                ctx.fillRect(bx, rgbY, boxW, 18);
-                ctx.strokeStyle = "#888";
-                ctx.strokeRect(bx, rgbY, boxW, 18);
-                ctx.fillStyle = "#ffffff";
-                ctx.fillText(String(values[i][1]), bx + boxW / 2, rgbY + 9);
-                ctx.fillStyle = "#d1d5db";
-                ctx.fillText(values[i][0], bx + boxW / 2, rgbY + 31);
-            }
-
-            widget._fcwColorRects = {
-                sv: { x: panelX, y: panelY, w: panelW, h: panelH },
-                hue: { x: hueX, y: hueY, w: hueW, h: hueH },
-            };
-            ctx.restore();
-        };
-        widget._fcwStopColorDrag = () => {
-            widget._fcwColorDrag = null;
-            widget._fcwColorDragNode = null;
-            widget._fcwColorAbort?.abort?.();
-            widget._fcwColorAbort = null;
-        };
-        widget.mouse = (event, pos, targetNode) => {
-            const activeNode = targetNode || node;
-            const updateFromPos = (kind, point) => {
-                const rect = widget._fcwColorRects?.[kind];
-                if (!rect) {
-                    return false;
-                }
-                const rgb = hexToRgb(widget.value);
-                const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
-                if (kind === "sv") {
-                    hsv.s = clamp((point[0] - rect.x) / rect.w, 0, 1);
-                    hsv.v = clamp(1 - (point[1] - rect.y) / rect.h, 0, 1);
-                } else {
-                    hsv.h = clamp((point[0] - rect.x) / rect.w, 0, 1) * 360;
-                }
-                const next = hsvToRgb(hsv.h, hsv.s, hsv.v);
-                widget.value = rgbToHex(next.r, next.g, next.b);
-                widget.callback?.(widget.value, null, activeNode);
-                dirtyNode(activeNode);
-                return true;
-            };
-
-            if (isUpEvent(event)) {
-                widget._fcwStopColorDrag();
-                return true;
-            }
-            if (isMoveEvent(event) && widget._fcwColorDrag) {
-                return updateFromPos(widget._fcwColorDrag, eventToNodePos(event, activeNode) || pos);
-            }
-            if (!isDownEvent(event)) {
-                return false;
-            }
-            const point = eventToNodePos(event, activeNode) || pos;
-            for (const kind of ["sv", "hue"]) {
-                const rect = widget._fcwColorRects?.[kind];
-                if (rect && point[0] >= rect.x && point[0] <= rect.x + rect.w && point[1] >= rect.y && point[1] <= rect.y + rect.h) {
-                    widget._fcwColorDrag = kind;
-                    widget._fcwColorDragNode = activeNode;
-                    widget._fcwColorAbort?.abort?.();
-                    widget._fcwColorAbort = new AbortController();
-                    const signal = widget._fcwColorAbort.signal;
-                    const move = (moveEvent) => {
-                        const movePoint = eventToNodePos(moveEvent, activeNode);
-                        if (movePoint) {
-                            updateFromPos(kind, movePoint);
-                            moveEvent.preventDefault?.();
-                        }
-                    };
-                    const up = (upEvent) => {
-                        widget._fcwStopColorDrag();
-                        dirtyNode(activeNode);
-                        upEvent.preventDefault?.();
-                    };
-                    document.addEventListener("pointermove", move, { signal, capture: true });
-                    document.addEventListener("mousemove", move, { signal, capture: true });
-                    document.addEventListener("pointerup", up, { signal, capture: true });
-                    document.addEventListener("mouseup", up, { signal, capture: true });
-                    event.preventDefault?.();
-                    event.stopPropagation?.();
-                    return updateFromPos(kind, point);
-                }
-            }
-            return false;
-        };
-        widget._fcwColorCallbackInstalled = true;
-        widget._fcwColorCallbackVersion = 3;
-    }
-}
-
-function applyCompactVisibility(node) {
-    const modeName = mode(node);
-    const textModes = new Set(["Text", "Logo + Text", "Camera Bar", "Transparent Watermark"]);
-    const visible = new Set(["mode", "text_color", "text_opacity"]);
-
-    if (textModes.has(modeName)) {
-        ["font_style", "line_1", "line_2", "line_3", "font_size"].forEach((name) => visible.add(name));
-    }
-    if (modeName === "Pattern Watermark") {
-        ["pattern_type", "pattern_density", "pattern_seed", "pattern_scale_min", "pattern_scale_max"].forEach((name) => visible.add(name));
-    }
-
-    const alwaysHidden = new Set([
-        "preset",
-        "layout_json",
-        "auto_adapt",
-        "safe_margin",
-        "bar_color",
-        "bar_opacity",
-        "bar_height",
-        "logo_opacity",
-        "pattern_color",
-        "pattern_opacity",
-    ]);
-
-    for (const widget of node.widgets || []) {
-        if (!widget?.name || widget.name === TRANSFORM_WIDGET || widget.type === "button") {
-            continue;
-        }
-        setWidgetHidden(widget, alwaysHidden.has(widget.name) || !visible.has(widget.name));
-    }
-    node.setDirtyCanvas?.(true, true);
-    node.graph?.setDirtyCanvas?.(true, true);
-}
-
-function installModeCallback(node) {
-    const widget = findWidget(node, "mode");
-    if (!widget || widget._fcwModeCallbackVersion === 3) {
-        return;
-    }
-    const originalCallback = widget._fcwOriginalModeCallback || widget.callback;
-    widget._fcwOriginalModeCallback = originalCallback;
-    widget.callback = (value, canvas, targetNode, pos, event) => {
-        widget.value = value;
-        const result = originalCallback?.(value, canvas, targetNode, pos, event);
-        node._fcwLastMode = null;
-        resetLayoutForMode(node);
-        applyCompactVisibility(node);
-        dirtyNode(node);
-        return result;
+    return {
+        ...fallback,
+        x: Number.isFinite(Number(saved.x)) ? Number(saved.x) : fallback.x,
+        y: Number.isFinite(Number(saved.y)) ? Number(saved.y) : fallback.y,
+        w: Number.isFinite(Number(saved.w)) ? Number(saved.w) : fallback.w,
+        h: Number.isFinite(Number(saved.h)) ? Number(saved.h) : fallback.h,
+        layout: typeof saved.layout === "string" ? saved.layout : fallback.layout,
+        aspect: Number.isFinite(Number(saved.aspect)) ? Number(saved.aspect) : fallback.aspect,
+        mode,
     };
-    widget._fcwModeCallbackInstalled = true;
-    widget._fcwModeCallbackVersion = 3;
 }
 
-function syncModeChange(node, force = false) {
-    const modeName = mode(node);
-    if (!force && node._fcwObservedMode === modeName) {
-        return false;
-    }
-    node._fcwObservedMode = modeName;
-    node._fcwLastMode = null;
-    resetLayoutForMode(node);
-    applyCompactVisibility(node);
+function writeLayout(node, layout) {
+    const next = {
+        mode: canonicalMode(layout.mode || getWidgetValue(node, "mode", "相机白条")),
+        x: round(clamp(Number(layout.x), 0, 100)),
+        y: round(clamp(Number(layout.y), 0, 100)),
+        w: round(clamp(Number(layout.w), MIN_BOX, 100)),
+        h: round(clamp(Number(layout.h), MIN_BOX, 100)),
+        layout: layout.layout || "Text Only",
+        aspect: Number.isFinite(Number(layout.aspect)) ? Number(layout.aspect) : imageAspect(node),
+    };
+    setWidgetValue(node, "layout_json", JSON.stringify(next), false);
     dirtyNode(node);
-    return true;
 }
 
-function installModeValueWatcher(node) {
-    const widget = findWidget(node, "mode");
-    if (!widget || widget._fcwModeValueWatcherVersion === 1) {
+function hideWidget(widget) {
+    widget.hidden = true;
+    widget.type = "hidden";
+    widget.computeSize = () => [0, -4];
+}
+
+function hideControlledWidgets(node) {
+    for (const widget of node.widgets || []) {
+        if (CONTROLLED_WIDGETS.has(widget?.name)) {
+            hideWidget(widget);
+        }
+    }
+}
+
+function ensureStyle() {
+    if (document.getElementById("fcw-style")) {
         return;
     }
-    let current = widget.value;
-    Object.defineProperty(widget, "value", {
-        configurable: true,
-        enumerable: true,
-        get() {
-            return current;
-        },
-        set(next) {
-            const changed = current !== next;
-            current = next;
-            if (changed && node._fcwModeWatcherReady && !node._fcwSuppressModeWatcher) {
-                setTimeout(() => syncModeChange(node, true), 0);
-            }
-        },
-    });
-    node._fcwObservedMode = mode(node);
-    widget._fcwModeValueWatcherVersion = 1;
+    const style = document.createElement("style");
+    style.id = "fcw-style";
+    style.textContent = `
+.fcw-panel{box-sizing:border-box;width:100%;padding:10px;color:#e5e7eb;font:12px/1.35 sans-serif;user-select:none}
+.fcw-panel *{box-sizing:border-box}
+.fcw-row{display:grid;grid-template-columns:72px 1fr;align-items:center;gap:8px;margin-bottom:7px}
+.fcw-row label{color:#cbd5e1;white-space:nowrap}
+.fcw-panel input,.fcw-panel select{width:100%;height:24px;border:1px solid #555;border-radius:5px;background:#242424;color:#f8fafc;font:12px sans-serif;padding:2px 6px}
+.fcw-panel input[type=color]{width:34px;padding:0;border-radius:6px;cursor:pointer}
+.fcw-color-wrap{display:grid;grid-template-columns:38px 1fr;gap:8px;align-items:center}
+.fcw-opacity-wrap{display:grid;grid-template-columns:1fr 44px;gap:8px;align-items:center}
+.fcw-opacity-wrap input{padding:0}
+.fcw-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fcw-preview-title{margin:9px 0 5px;color:#cbd5e1}
+.fcw-stage{position:relative;margin:0 auto 7px;width:170px;height:260px;max-width:100%;border:1px solid #334155;border-radius:7px;overflow:hidden;background:#111827;background-size:cover;background-position:center;touch-action:none}
+.fcw-stage::before{content:"";position:absolute;inset:0;background-image:linear-gradient(#334155 1px,transparent 1px),linear-gradient(90deg,#334155 1px,transparent 1px);background-size:32px 32px;opacity:.55}
+.fcw-box{position:absolute;border:2px solid #60a5fa;border-radius:7px;background:rgba(96,165,250,.16);min-width:18px;min-height:18px;cursor:move;touch-action:none}
+.fcw-box-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:#fff;font-size:11px;overflow:hidden;pointer-events:none}
+.fcw-handle{position:absolute;right:-3px;bottom:-3px;width:9px;height:9px;background:#60a5fa;border:1px solid #fff;border-radius:2px;cursor:nwse-resize}
+.fcw-info{text-align:right;color:#9ca3af;font-size:10px;min-height:14px}
+.fcw-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:8px}
+.fcw-actions button,.fcw-random{height:24px;border:1px solid #555;border-radius:5px;background:#2b2b2b;color:#f8fafc;font-size:11px;cursor:pointer}
+.fcw-actions button:hover,.fcw-random:hover{border-color:#93c5fd}
+.fcw-hidden{display:none}
+`;
+    document.head.appendChild(style);
 }
 
-function installModeDrawGuard(node) {
-    if (node._fcwModeDrawGuardVersion === 2) {
-        return;
+function make(tag, className, text) {
+    const el = document.createElement(tag);
+    if (className) {
+        el.className = className;
     }
-    const originalDrawForeground = node.onDrawForeground;
-    node.onDrawForeground = function (ctx, ...args) {
-        ensureModeLayout(this);
-        return originalDrawForeground?.call(this, ctx, ...args);
-    };
-    const originalDrawBackground = node.onDrawBackground;
-    node.onDrawBackground = function (ctx, ...args) {
-        ensureModeLayout(this);
-        return originalDrawBackground?.call(this, ctx, ...args);
-    };
-    const originalComputeSize = node.computeSize;
-    node.computeSize = function (...args) {
-        ensureModeLayout(this);
-        return originalComputeSize?.apply(this, args) || this.size;
-    };
-    node._fcwModeDrawGuardVersion = 2;
+    if (text !== undefined) {
+        el.textContent = text;
+    }
+    return el;
 }
 
-function transformArea(widgetWidth, widgetY, aspect) {
-    const margin = 12;
-    const header = 24;
-    const maxW = Math.max(120, widgetWidth - margin * 2);
-    const maxH = 185;
-    let width = maxW;
-    let height = width / aspect;
-    if (height > maxH) {
-        height = maxH;
-        width = height * aspect;
-    }
-    return {
-        x: margin + (maxW - width) / 2,
-        y: widgetY + header + 8,
-        w: width,
-        h: height,
-        maxX: margin,
-        maxW,
-    };
+function addRow(root, label, child) {
+    const row = make("div", "fcw-row");
+    row.appendChild(make("label", "", label));
+    row.appendChild(child);
+    root.appendChild(row);
+    return row;
 }
 
-function isDownEvent(event) {
-    return event.type === "pointerdown" || event.type === "mousedown";
+function makeSelect(values, value) {
+    const select = document.createElement("select");
+    for (const item of values) {
+        const option = document.createElement("option");
+        option.value = item;
+        option.textContent = item;
+        select.appendChild(option);
+    }
+    select.value = values.includes(value) ? value : values[0];
+    return select;
 }
 
-function isMoveEvent(event) {
-    return event.type === "pointermove" || event.type === "mousemove";
+function stageSize(aspect) {
+    const maxW = 210;
+    const maxH = 260;
+    let w = maxW;
+    let h = w / Math.max(0.1, aspect);
+    if (h > maxH) {
+        h = maxH;
+        w = h * aspect;
+    }
+    return { w: Math.max(90, Math.round(w)), h: Math.max(90, Math.round(h)) };
 }
 
-function isUpEvent(event) {
-    return event.type === "pointerup" || event.type === "mouseup" || event.type === "pointerleave" || event.type === "mouseleave";
-}
-
-function targetBox(area, layout) {
-    const width = clamp((layout.w / 100) * area.w, 18, area.w);
-    const height = clamp((layout.h / 100) * area.h, 16, area.h);
-    const centerX = area.x + (layout.x / 100) * area.w;
-    const centerY = area.y + (layout.y / 100) * area.h;
-    return {
-        x: clamp(centerX - width / 2, area.x, area.x + area.w - width),
-        y: clamp(centerY - height / 2, area.y, area.y + area.h - height),
-        w: width,
-        h: height,
-    };
-}
-
-function imageSize(node, area) {
-    const img = node?.imgs?.[0];
-    const width = img?.naturalWidth || img?.width || Math.round(area.w);
-    const height = img?.naturalHeight || img?.height || Math.round(area.h);
-    return { width, height };
-}
-
-function drawReferenceCanvas(ctx, node, area) {
-    const img = node?.imgs?.[0];
-    ctx.save();
-    drawRoundRect(ctx, area.x, area.y, area.w, area.h, 7);
-    ctx.clip();
-    if (img) {
-        ctx.fillStyle = "#111827";
-        ctx.fillRect(area.x, area.y, area.w, area.h);
-        ctx.drawImage(img, area.x, area.y, area.w, area.h);
-        ctx.fillStyle = "rgba(0,0,0,0.12)";
-        ctx.fillRect(area.x, area.y, area.w, area.h);
-    } else {
-        ctx.fillStyle = "#1f242c";
-        ctx.fillRect(area.x, area.y, area.w, area.h);
-        ctx.strokeStyle = "rgba(255,255,255,0.08)";
-        ctx.lineWidth = 1;
-        for (let i = 1; i < 4; i += 1) {
-            const x = area.x + (area.w * i) / 4;
-            ctx.beginPath();
-            ctx.moveTo(x, area.y);
-            ctx.lineTo(x, area.y + area.h);
-            ctx.stroke();
-        }
-        for (let i = 1; i < 3; i += 1) {
-            const y = area.y + (area.h * i) / 3;
-            ctx.beginPath();
-            ctx.moveTo(area.x, y);
-            ctx.lineTo(area.x + area.w, y);
-            ctx.stroke();
-        }
-    }
-    ctx.restore();
-
-    ctx.strokeStyle = "#4b5563";
-    ctx.lineWidth = 1;
-    drawRoundRect(ctx, area.x, area.y, area.w, area.h, 7);
-    ctx.stroke();
-}
-
-function drawSciFiPatternPreview(ctx, box, color, alpha) {
-    ctx.save();
-    ctx.strokeStyle = `${color}${alpha}`;
-    ctx.fillStyle = `${color}18`;
-    ctx.lineWidth = 1;
-    const gap = Math.max(12, Math.min(box.w, box.h) / 5);
-    for (let x = box.x; x <= box.x + box.w; x += gap) {
-        ctx.beginPath();
-        ctx.moveTo(x, box.y);
-        ctx.lineTo(x, box.y + box.h);
-        ctx.stroke();
-    }
-    for (let y = box.y; y <= box.y + box.h; y += gap) {
-        ctx.beginPath();
-        ctx.moveTo(box.x, y);
-        ctx.lineTo(box.x + box.w, y);
-        ctx.stroke();
-    }
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(box.x + box.w * 0.08, box.y + box.h * 0.22);
-    ctx.lineTo(box.x + box.w * 0.42, box.y + box.h * 0.22);
-    ctx.lineTo(box.x + box.w * 0.52, box.y + box.h * 0.34);
-    ctx.lineTo(box.x + box.w * 0.9, box.y + box.h * 0.34);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(box.x + box.w * 0.12, box.y + box.h * 0.74);
-    ctx.lineTo(box.x + box.w * 0.36, box.y + box.h * 0.74);
-    ctx.lineTo(box.x + box.w * 0.46, box.y + box.h * 0.62);
-    ctx.lineTo(box.x + box.w * 0.82, box.y + box.h * 0.62);
-    ctx.stroke();
-    ctx.fillRect(box.x + box.w * 0.16, box.y + box.h * 0.42, box.w * 0.12, 2);
-    ctx.fillRect(box.x + box.w * 0.66, box.y + box.h * 0.48, box.w * 0.18, 2);
-    ctx.restore();
-}
-
-function drawGradientGlowPreview(ctx, box, color) {
-    ctx.save();
-    drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
-    ctx.clip();
-
-    const gradient = ctx.createLinearGradient(box.x, box.y + box.h, box.x + box.w, box.y);
-    gradient.addColorStop(0, `${color}08`);
-    gradient.addColorStop(0.45, `${color}30`);
-    gradient.addColorStop(1, `${color}66`);
-    ctx.fillStyle = gradient;
-    ctx.fillRect(box.x, box.y, box.w, box.h);
-
-    ctx.strokeStyle = `${color}88`;
-    ctx.lineWidth = 1.5;
-    for (let i = -1; i < 4; i += 1) {
-        const startX = box.x + box.w * (i * 0.3);
-        ctx.beginPath();
-        ctx.moveTo(startX, box.y + box.h);
-        ctx.lineTo(startX + box.w * 0.7, box.y);
-        ctx.stroke();
-    }
-
-    ctx.fillStyle = `${color}28`;
-    ctx.fillRect(box.x + box.w * 0.12, box.y + box.h * 0.22, box.w * 0.22, Math.max(2, box.h * 0.035));
-    ctx.fillRect(box.x + box.w * 0.58, box.y + box.h * 0.68, box.w * 0.28, Math.max(2, box.h * 0.035));
-    ctx.restore();
-}
-
-function drawPatternPreview(ctx, node, box, color, alpha) {
-    const type = patternType(node);
-    if (type === "Gradient Glow") {
-        drawGradientGlowPreview(ctx, box, color);
-        return;
-    }
-    if (type === "Sci-Fi Grid") {
-        drawSciFiPatternPreview(ctx, box, color, alpha);
-        return;
-    }
-    ctx.strokeStyle = `${color}${alpha}`;
-    ctx.lineWidth = 1;
-    for (let x = box.x - box.h; x < box.x + box.w + box.h; x += 18) {
-        ctx.beginPath();
-        ctx.moveTo(x, box.y + box.h);
-        ctx.lineTo(x + box.h, box.y);
-        ctx.stroke();
-    }
-}
-
-function drawModePreview(ctx, node, box) {
-    const modeName = mode(node);
-    const color = hexColor(widgetValue(node, "text_color", "#ffffff"));
-    const alpha = clamp(opacityPercent(node) / 100, 0.08, 1);
-
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    if (modeName === "Pattern Watermark") {
-        ctx.fillStyle = `${color}24`;
-        drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
-        ctx.fill();
-        drawPatternPreview(ctx, node, box, color, "66");
-    } else if (modeName === "Logo") {
-        ctx.fillStyle = "rgba(96,165,250,0.28)";
-        drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
-        ctx.fill();
-        ctx.fillStyle = "#dbeafe";
-        ctx.font = "12px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("LOGO 原色", box.x + box.w / 2, box.y + box.h / 2 + 4);
-    } else if (modeName === "Logo + Text") {
-        ctx.fillStyle = "rgba(96,165,250,0.28)";
-        drawRoundRect(ctx, box.x + 8, box.y + 8, box.w * 0.22, box.h - 16, 4);
-        ctx.fill();
-        ctx.fillStyle = color;
-        ctx.fillRect(box.x + box.w * 0.34, box.y + box.h * 0.34, box.w * 0.52, 2);
-        ctx.fillRect(box.x + box.w * 0.34, box.y + box.h * 0.55, box.w * 0.42, 2);
-    } else {
-        ctx.fillStyle = modeName === "Camera Bar" ? color : `${color}33`;
-        drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
-        ctx.fill();
-        ctx.fillStyle = modeName === "Camera Bar" ? "#111827" : color;
-        ctx.fillRect(box.x + box.w * 0.16, box.y + box.h * 0.34, box.w * 0.68, 2);
-        ctx.fillRect(box.x + box.w * 0.28, box.y + box.h * 0.56, box.w * 0.44, 2);
-    }
-    ctx.restore();
-}
-
-class WatermarkTransformWidget {
-    constructor() {
-        this.name = TRANSFORM_WIDGET;
-        this.type = "custom";
-        this.value = "";
-        this._area = null;
-        this._box = null;
-        this._drag = null;
-    }
-
-    computeSize(width) {
-        return [width, CONTROL_HEIGHT];
-    }
-
-    draw(ctx, node, widgetWidth, widgetY) {
-        const modeName = mode(node);
-        if (this._modeName !== modeName) {
-            this._drag = null;
-            this._modeName = modeName;
-        }
-        ensureModeLayout(node);
-        const aspect = canvasAspect(node);
-        const area = transformArea(widgetWidth, widgetY, aspect);
-        const layout = readLayout(node);
-        const box = targetBox(area, layout);
-        this._area = area;
-        this._box = box;
-
-        ctx.save();
-        ctx.font = "12px sans-serif";
-        ctx.textAlign = "left";
-        ctx.fillStyle = "#d1d5db";
-        ctx.fillText("拖动移动，拉右下角缩放", 12, widgetY + 16);
-
-        drawReferenceCanvas(ctx, node, area);
-
-        drawModePreview(ctx, node, box);
-
-        ctx.strokeStyle = "#60a5fa";
-        ctx.lineWidth = 2;
-        drawRoundRect(ctx, box.x, box.y, box.w, box.h, 6);
-        ctx.stroke();
-
-        const handle = 11;
-        ctx.fillStyle = "#60a5fa";
-        ctx.fillRect(box.x + box.w - handle, box.y + box.h - handle, handle, handle);
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(box.x + box.w - handle, box.y + box.h - handle, handle, handle);
-
-        const pixels = imageSize(node, area);
-        const approxW = Math.round((layout.w / 100) * pixels.width);
-        const approxH = Math.round((layout.h / 100) * pixels.height);
-        ctx.fillStyle = "#9ca3af";
-        ctx.font = "10px sans-serif";
-        ctx.textAlign = "right";
-        ctx.fillText(`x ${round(layout.x)}%  y ${round(layout.y)}%  宽 ${round(layout.w)}%  高 ${round(layout.h)}%  约 ${approxW}×${approxH}px`, area.maxX + area.maxW, area.y + area.h + 16);
-        ctx.restore();
-    }
-
-    mouse(event, pos, node) {
-        if (!this._area || !this._box) {
-            return false;
-        }
-        const [x, y] = pos;
-        const area = this._area;
-        const box = this._box;
-        const hitPad = Math.max(32, Math.min(56, Math.max(box.w, box.h) * 0.7));
-        const handle = 16;
-        const handleBleed = 4;
-        const inArea = x >= area.x && x <= area.x + area.w && y >= area.y && y <= area.y + area.h;
-        const inBox = x >= box.x - hitPad && x <= box.x + box.w + hitPad && y >= box.y - hitPad && y <= box.y + box.h + hitPad;
-        const inHandle = x >= box.x + box.w - handle && x <= box.x + box.w + handleBleed && y >= box.y + box.h - handle && y <= box.y + box.h + handleBleed;
-
-        if (isDownEvent(event)) {
-            if (!inArea && !inBox) {
-                return false;
-            }
-            const start = readLayout(node);
-            const pointerX = ((clamp(x, area.x, area.x + area.w) - area.x) / area.w) * 100;
-            const pointerY = ((clamp(y, area.y, area.y + area.h) - area.y) / area.h) * 100;
-            let startLayout = start;
-            if (!inBox) {
-                startLayout = { ...start, x: pointerX, y: pointerY };
-                writeLayout(node, startLayout);
-            }
-            this._drag = {
-                mode: inHandle ? "scale" : "move",
-                start: startLayout,
-                offsetX: inBox ? pointerX - start.x : 0,
-                offsetY: inBox ? pointerY - start.y : 0,
-                left: ((box.x - area.x) / area.w) * 100,
-                top: ((box.y - area.y) / area.h) * 100,
-            };
-            return true;
-        }
-
-        if (isMoveEvent(event) && this._drag) {
-            const next = { ...this._drag.start };
-            if (this._drag.mode === "move") {
-                next.x = ((clamp(x, area.x, area.x + area.w) - area.x) / area.w) * 100 - this._drag.offsetX;
-                next.y = ((clamp(y, area.y, area.y + area.h) - area.y) / area.h) * 100 - this._drag.offsetY;
-            } else {
-                const right = ((clamp(x, area.x, area.x + area.w) - area.x) / area.w) * 100;
-                const bottom = ((clamp(y, area.y, area.y + area.h) - area.y) / area.h) * 100;
-                next.w = Math.max(MIN_BOX, right - this._drag.left);
-                next.h = Math.max(MIN_BOX, bottom - this._drag.top);
-                next.x = this._drag.left + next.w / 2;
-                next.y = this._drag.top + next.h / 2;
-            }
-            writeLayout(node, next);
-            return true;
-        }
-
-        if (isUpEvent(event) && this._drag) {
-            this._drag = null;
-            return true;
-        }
-        return false;
-    }
-}
-
-function addButton(node, name, callback) {
-    if (node.widgets?.some((widget) => widget?.name === name)) {
-        return;
-    }
-    node.addWidget("button", name, null, () => callback(node));
-}
-
-function randomizePattern(node) {
-    const current = String(widgetValue(node, "pattern_type", "渐变光影"));
-    if (current === "无" || current === "None") {
-        setWidgetValue(node, "pattern_type", "渐变光影");
-    }
-    setWidgetValue(node, "pattern_seed", Math.floor(Math.random() * 2147483647));
-}
-
-function fitWidth(node) {
+function updateBox(panel) {
+    const { node, stage, box, info } = panel;
     const layout = readLayout(node);
-    const modeName = mode(node);
-    writeLayout(node, {
-        ...layout,
-        w: modeName === "Pattern Watermark" ? 100 : 86,
-        h: modeName === "Pattern Watermark" ? 100 : layout.h,
-    });
+    const rect = stage.getBoundingClientRect();
+    const x = (layout.x / 100) * rect.width;
+    const y = (layout.y / 100) * rect.height;
+    const w = (layout.w / 100) * rect.width;
+    const h = (layout.h / 100) * rect.height;
+    box.style.left = `${x - w / 2}px`;
+    box.style.top = `${y - h / 2}px`;
+    box.style.width = `${w}px`;
+    box.style.height = `${h}px`;
+    const approxW = Math.round((layout.w / 100) * (node.imgs?.[0]?.naturalWidth || node.imgs?.[0]?.width || 0));
+    const approxH = Math.round((layout.h / 100) * (node.imgs?.[0]?.naturalHeight || node.imgs?.[0]?.height || 0));
+    info.textContent = `x ${round(layout.x)}%  y ${round(layout.y)}%  宽 ${round(layout.w)}%  高 ${round(layout.h)}%${approxW ? ` 约 ${approxW}×${approxH}px` : ""}`;
 }
 
-function addCustomWidgets(node) {
-    node.widgets = (node.widgets || []).filter((widget) => widget?.name !== TRANSFORM_WIDGET && !OWN_BUTTONS.has(widget?.name));
-    localizeWidgetValues(node);
-    localizeComboChoices(node);
-    applyChineseLabels(node);
-    installColorWidget(node);
-    installModeCallback(node);
-    installModeValueWatcher(node);
-    installModeDrawGuard(node);
+function updatePreview(panel) {
+    const { node, stage, boxLabel } = panel;
+    const mode = canonicalMode(getWidgetValue(node, "mode", "相机白条"));
+    const aspect = imageAspect(node);
+    const size = stageSize(aspect);
+    const img = node.imgs?.[0];
+    stage.style.width = `${size.w}px`;
+    stage.style.height = `${size.h}px`;
+    stage.style.backgroundImage = img?.src ? `url("${img.src}")` : "";
+    const line1 = getWidgetValue(node, "line_1", "");
+    const line2 = getWidgetValue(node, "line_2", "");
+    if (mode === "Logo") {
+        boxLabel.textContent = "LOGO";
+    } else if (mode === "Logo+文字") {
+        boxLabel.textContent = "LOGO + 文字";
+    } else if (mode === "图案水印") {
+        boxLabel.textContent = getWidgetValue(node, "pattern_type", "渐变光影");
+    } else {
+        boxLabel.textContent = [line1, line2].filter(Boolean).join("\n") || mode;
+    }
+    updateBox(panel);
+}
 
-    node.addCustomWidget(new WatermarkTransformWidget());
-    addButton(node, "重置位置", resetLayoutForMode);
-    addButton(node, "居中", (target) => writeLayout(target, { ...readLayout(target), x: 50, y: 50 }));
-    addButton(node, "底部", (target) => writeLayout(target, { ...readLayout(target), x: 50, y: 90 }));
-    addButton(node, "适配宽度", fitWidth);
-    addButton(node, "随机图案", randomizePattern);
-    applyCompactVisibility(node);
-    node._fcwModeWatcherReady = true;
+function applyMode(panel, nextMode, reset = true) {
+    const { node, sections, controls } = panel;
+    const mode = canonicalMode(nextMode);
+    setWidgetValue(node, "mode", mode);
+    if (reset) {
+        writeLayout(node, defaultLayout(mode, imageAspect(node)));
+    }
+    sections.text.classList.toggle("fcw-hidden", !["文字", "Logo+文字", "相机白条", "透明水印"].includes(mode));
+    sections.pattern.classList.toggle("fcw-hidden", mode !== "图案水印");
+    controls.mode.value = mode;
+    updatePreview(panel);
+    dirtyNode(node);
+}
 
+function syncFromWidgets(panel) {
+    const { node, controls } = panel;
+    controls.mode.value = canonicalMode(getWidgetValue(node, "mode", "相机白条"));
+    controls.font.value = getWidgetValue(node, "font_style", "默认");
+    controls.color.value = hexColor(getWidgetValue(node, "text_color", "#ffffff"));
+    controls.colorHex.value = controls.color.value;
+    controls.opacity.value = String(clamp(Number(getWidgetValue(node, "text_opacity", 100)), 0, 100));
+    controls.opacityText.textContent = `${controls.opacity.value}%`;
+    controls.line1.value = getWidgetValue(node, "line_1", "");
+    controls.line2.value = getWidgetValue(node, "line_2", "");
+    controls.line3.value = getWidgetValue(node, "line_3", "");
+    controls.fontSize.value = String(getWidgetValue(node, "font_size", 28));
+    controls.pattern.value = getWidgetValue(node, "pattern_type", "渐变光影");
+    controls.density.value = String(getWidgetValue(node, "pattern_density", 18));
+    controls.scaleMin.value = String(getWidgetValue(node, "pattern_scale_min", 6));
+    controls.scaleMax.value = String(getWidgetValue(node, "pattern_scale_max", 22));
+    applyMode(panel, controls.mode.value, false);
+}
+
+function bindDrag(panel) {
+    const { node, stage, box, handle } = panel;
+    let drag = null;
+    const pointerToPercent = (event) => {
+        const rect = stage.getBoundingClientRect();
+        return {
+            x: ((event.clientX - rect.left) / rect.width) * 100,
+            y: ((event.clientY - rect.top) / rect.height) * 100,
+        };
+    };
+    const stop = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+    };
+    const startDrag = (event, kind) => {
+        stop(event);
+        const layout = readLayout(node);
+        const point = pointerToPercent(event);
+        const left = layout.x - layout.w / 2;
+        const top = layout.y - layout.h / 2;
+        drag = {
+            kind,
+            layout,
+            left,
+            top,
+            offsetX: point.x - layout.x,
+            offsetY: point.y - layout.y,
+        };
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+    };
+    stage.addEventListener("pointerdown", (event) => {
+        if (event.target === handle || event.target === box) {
+            return;
+        }
+        stop(event);
+        const point = pointerToPercent(event);
+        const layout = { ...readLayout(node), x: point.x, y: point.y };
+        writeLayout(node, layout);
+        updateBox(panel);
+        startDrag(event, "move");
+    });
+    box.addEventListener("pointerdown", (event) => startDrag(event, "move"));
+    handle.addEventListener("pointerdown", (event) => startDrag(event, "scale"));
+    const onMove = (event) => {
+        if (!drag) {
+            return;
+        }
+        stop(event);
+        const point = pointerToPercent(event);
+        const next = { ...drag.layout };
+        if (drag.kind === "scale") {
+            next.w = clamp(point.x - drag.left, MIN_BOX, 100);
+            next.h = clamp(point.y - drag.top, MIN_BOX, 100);
+            next.x = drag.left + next.w / 2;
+            next.y = drag.top + next.h / 2;
+        } else {
+            next.x = clamp(point.x - drag.offsetX, 0, 100);
+            next.y = clamp(point.y - drag.offsetY, 0, 100);
+        }
+        writeLayout(node, next);
+        updateBox(panel);
+    };
+    const onUp = (event) => {
+        if (drag) {
+            stop(event);
+            drag = null;
+        }
+    };
+    document.addEventListener("pointermove", onMove, true);
+    document.addEventListener("pointerup", onUp, true);
+}
+
+function createPanel(node) {
+    ensureStyle();
+    const root = make("div", "fcw-panel");
+    root.addEventListener("pointerdown", (event) => event.stopPropagation());
+    root.addEventListener("mousedown", (event) => event.stopPropagation());
+    root.addEventListener("wheel", (event) => event.stopPropagation());
+
+    const controls = {};
+    controls.mode = makeSelect(MODES, canonicalMode(getWidgetValue(node, "mode", "相机白条")));
+    addRow(root, "模式", controls.mode);
+
+    controls.font = makeSelect(FONT_STYLES, getWidgetValue(node, "font_style", "默认"));
+    addRow(root, "字体", controls.font);
+
+    const textSection = make("div");
+    controls.line1 = document.createElement("input");
+    controls.line2 = document.createElement("input");
+    controls.line3 = document.createElement("input");
+    controls.fontSize = document.createElement("input");
+    controls.fontSize.type = "number";
+    controls.fontSize.min = "6";
+    controls.fontSize.max = "256";
+    addRow(textSection, "文字1", controls.line1);
+    addRow(textSection, "文字2", controls.line2);
+    addRow(textSection, "文字3", controls.line3);
+    addRow(textSection, "字号", controls.fontSize);
+    root.appendChild(textSection);
+
+    const colorWrap = make("div", "fcw-color-wrap");
+    controls.color = document.createElement("input");
+    controls.color.type = "color";
+    controls.colorHex = document.createElement("input");
+    controls.colorHex.placeholder = "#ffffff";
+    colorWrap.appendChild(controls.color);
+    colorWrap.appendChild(controls.colorHex);
+    addRow(root, "主颜色", colorWrap);
+
+    const opacityWrap = make("div", "fcw-opacity-wrap");
+    controls.opacity = document.createElement("input");
+    controls.opacity.type = "range";
+    controls.opacity.min = "0";
+    controls.opacity.max = "100";
+    controls.opacity.step = "1";
+    controls.opacityText = make("span", "", "100%");
+    opacityWrap.appendChild(controls.opacity);
+    opacityWrap.appendChild(controls.opacityText);
+    addRow(root, "透明度", opacityWrap);
+
+    const patternSection = make("div");
+    controls.pattern = makeSelect(PATTERNS, getWidgetValue(node, "pattern_type", "渐变光影"));
+    addRow(patternSection, "图案", controls.pattern);
+    const patternTwoA = make("div", "fcw-two");
+    controls.density = document.createElement("input");
+    controls.density.type = "number";
+    controls.density.min = "1";
+    controls.density.max = "100";
+    controls.scaleMin = document.createElement("input");
+    controls.scaleMin.type = "number";
+    controls.scaleMin.min = "1";
+    controls.scaleMin.max = "512";
+    patternTwoA.appendChild(controls.density);
+    patternTwoA.appendChild(controls.scaleMin);
+    addRow(patternSection, "密度/小", patternTwoA);
+    const patternTwoB = make("div", "fcw-two");
+    controls.scaleMax = document.createElement("input");
+    controls.scaleMax.type = "number";
+    controls.scaleMax.min = "1";
+    controls.scaleMax.max = "1024";
+    controls.random = make("button", "fcw-random", "随机图案");
+    patternTwoB.appendChild(controls.scaleMax);
+    patternTwoB.appendChild(controls.random);
+    addRow(patternSection, "大/随机", patternTwoB);
+    root.appendChild(patternSection);
+
+    root.appendChild(make("div", "fcw-preview-title", "拖动移动，拉右下角缩放"));
+    const stage = make("div", "fcw-stage");
+    const box = make("div", "fcw-box");
+    const boxLabel = make("div", "fcw-box-label");
+    const handle = make("div", "fcw-handle");
+    box.appendChild(boxLabel);
+    box.appendChild(handle);
+    stage.appendChild(box);
+    root.appendChild(stage);
+    const info = make("div", "fcw-info");
+    root.appendChild(info);
+
+    const actions = make("div", "fcw-actions");
+    for (const [label, action] of [
+        ["重置", () => writeLayout(node, defaultLayout(canonicalMode(controls.mode.value), imageAspect(node)))],
+        ["居中", () => writeLayout(node, { ...readLayout(node), x: 50, y: 50 })],
+        ["底部", () => writeLayout(node, { ...readLayout(node), x: 50, y: 90 })],
+        ["适宽", () => writeLayout(node, { ...readLayout(node), w: canonicalMode(controls.mode.value) === "图案水印" ? 100 : 86, h: canonicalMode(controls.mode.value) === "图案水印" ? 100 : readLayout(node).h })],
+    ]) {
+        const button = make("button", "", label);
+        button.addEventListener("click", (event) => {
+            event.preventDefault();
+            action();
+            updatePreview(panel);
+        });
+        actions.appendChild(button);
+    }
+    root.appendChild(actions);
+
+    const panel = {
+        node,
+        root,
+        controls,
+        sections: { text: textSection, pattern: patternSection },
+        stage,
+        box,
+        boxLabel,
+        handle,
+        info,
+    };
+
+    controls.mode.addEventListener("change", () => applyMode(panel, controls.mode.value, true));
+    controls.font.addEventListener("change", () => {
+        setWidgetValue(node, "font_style", controls.font.value);
+        updatePreview(panel);
+    });
+    for (const [control, widgetName] of [
+        [controls.line1, "line_1"],
+        [controls.line2, "line_2"],
+        [controls.line3, "line_3"],
+        [controls.fontSize, "font_size"],
+        [controls.pattern, "pattern_type"],
+        [controls.density, "pattern_density"],
+        [controls.scaleMin, "pattern_scale_min"],
+        [controls.scaleMax, "pattern_scale_max"],
+    ]) {
+        control.addEventListener("input", () => {
+            setWidgetValue(node, widgetName, control.value);
+            updatePreview(panel);
+        });
+    }
+    controls.color.addEventListener("input", () => {
+        const value = hexColor(controls.color.value);
+        controls.colorHex.value = value;
+        setWidgetValue(node, "text_color", value);
+        updatePreview(panel);
+    });
+    controls.colorHex.addEventListener("change", () => {
+        const value = hexColor(controls.colorHex.value, controls.color.value);
+        controls.color.value = value;
+        controls.colorHex.value = value;
+        setWidgetValue(node, "text_color", value);
+        updatePreview(panel);
+    });
+    controls.opacity.addEventListener("input", () => {
+        controls.opacityText.textContent = `${controls.opacity.value}%`;
+        setWidgetValue(node, "text_opacity", Number(controls.opacity.value));
+        updatePreview(panel);
+    });
+    controls.random.addEventListener("click", (event) => {
+        event.preventDefault();
+        setWidgetValue(node, "pattern_seed", Math.floor(Math.random() * 2147483647));
+        updatePreview(panel);
+    });
+
+    bindDrag(panel);
+    syncFromWidgets(panel);
+    return panel;
+}
+
+function installPanel(node) {
+    hideControlledWidgets(node);
+    if (node._fcwPanelWidget) {
+        return;
+    }
+    const panel = createPanel(node);
+    node._fcwPanel = panel;
+    node._fcwPanelWidget = node.addDOMWidget(DOM_WIDGET, "fcw", panel.root, {
+        serialize: false,
+        hideOnZoom: false,
+        getMinHeight: () => 500,
+        getMaxHeight: () => 760,
+    });
+    node._fcwPanelWidget.computeSize = (width) => [width, 560];
     node.serialize_widgets = true;
-    const width = Math.max(node.size?.[0] || 330, 380);
-    const height = Math.max(node.size?.[1] || 360, 480);
-    node.setSize?.([width, height]);
+    node.setSize?.([Math.max(node.size?.[0] || 380, 420), Math.max(node.size?.[1] || 620, 620)]);
 }
 
 app.registerExtension({
@@ -1150,7 +589,7 @@ app.registerExtension({
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () {
             const result = onNodeCreated?.apply(this, arguments);
-            addCustomWidgets(this);
+            installPanel(this);
             return result;
         };
 
@@ -1158,10 +597,12 @@ app.registerExtension({
         nodeType.prototype.onExecuted = function (message) {
             const result = onExecuted?.apply(this, arguments);
             setTimeout(() => {
-                refreshAspectFromImgs(this);
-                this.setDirtyCanvas?.(true, true);
-                this.graph?.setDirtyCanvas?.(true, true);
-            }, 60);
+                if (this._fcwPanel) {
+                    const layout = readLayout(this);
+                    writeLayout(this, { ...layout, aspect: imageAspect(this) });
+                    updatePreview(this._fcwPanel);
+                }
+            }, 80);
             return result;
         };
     },
