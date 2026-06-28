@@ -18,8 +18,7 @@ def run(mode, **kwargs):
     return node.apply_watermark(
         image=image,
         mode=mode,
-        preset="自定义",
-        font_style="默认",
+        font_style="\u9ed8\u8ba4",
         layout_json=layout,
         auto_adapt=True,
         safe_margin=0.0,
@@ -33,7 +32,7 @@ def run(mode, **kwargs):
         bar_opacity=100,
         bar_height=90,
         logo_opacity=100,
-        pattern_type=kwargs.get("pattern_type", "渐变光影"),
+        pattern_type=kwargs.get("pattern_type", "\u6e10\u53d8\u5149\u5f71"),
         pattern_color="#ffffff",
         pattern_opacity=32,
         pattern_density=kwargs.get("pattern_density", 18),
@@ -43,14 +42,14 @@ def run(mode, **kwargs):
     )[0]
 
 
-for mode in ["文字", "Logo", "Logo+文字", "相机白条", "透明水印", "图案水印"]:
+for mode in ["\u6587\u5b57", "Logo", "Logo+\u6587\u5b57", "\u76f8\u673a\u767d\u6761", "\u900f\u660e\u6c34\u5370", "\u56fe\u6848\u6c34\u5370"]:
     out = run(mode)
     assert tuple(out.shape) == (1, 96, 64, 3), mode
 
-pattern = run("图案水印")
+pattern = run("\u56fe\u6848\u6c34\u5370")
 assert torch.count_nonzero(pattern).item() > 0, "pattern mode must alter pixels"
 
-layout = fcw._resolve_layout('{"mode":"图案水印","x":7.7,"y":46.9,"w":78,"h":100}', "图案水印", 64, 96)
+layout = fcw._resolve_layout('{"mode":"\u56fe\u6848\u6c34\u5370","x":7.7,"y":46.9,"w":78,"h":100}', "\u56fe\u6848\u6c34\u5370", 64, 96)
 assert layout["x"] == 39.0, layout
 assert layout["y"] == 50.0, layout
 

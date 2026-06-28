@@ -20,7 +20,6 @@ const PATTERNS = ["渐变光影", "科幻光栅", "圆点", "斜线", "波纹", 
 
 const CONTROLLED_WIDGETS = new Set([
     "mode",
-    "preset",
     "font_style",
     "layout_json",
     "auto_adapt",

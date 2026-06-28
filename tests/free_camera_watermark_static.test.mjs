@@ -17,7 +17,6 @@ assert.match(frontend, /origin_id/, "drag preview must inspect the linked upstre
 assert.match(backend, /"layout_json":\s*\("STRING"/, "backend must keep hidden layout_json state");
 assert.match(backend, /"text_color":\s*\("STRING"/, "backend must keep text_color state");
 assert.match(backend, /"text_opacity":\s*\("INT"/, "backend must keep text_opacity state");
-assert.match(backend, /"preset":/, "backend must keep legacy preset slot to avoid old workflow widget offset");
+assert.doesNotMatch(backend, /"preset":\s*\(/, "backend must not insert a preset widget before font_style");
 assert.match(backend, /"pattern_color":/, "backend must keep legacy pattern_color slot to avoid old workflow widget offset");
-assert.match(frontend, /"preset"/, "frontend must hide the legacy preset slot");
 assert.match(frontend, /"pattern_color"/, "frontend must hide the legacy pattern_color slot");

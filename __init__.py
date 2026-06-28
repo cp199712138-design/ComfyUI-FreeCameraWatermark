@@ -590,7 +590,6 @@ class FreeCameraWatermark:
             "required": {
                 "image": ("IMAGE",),
                 "mode": (MODE_CHOICES, {"default": "\u76f8\u673a\u767d\u6761", "tooltip": "\u9009\u62e9\u6c34\u5370\u7c7b\u578b\u3002"}),
-                "preset": (PRESET_CHOICES, {"default": "\u81ea\u5b9a\u4e49", "tooltip": "\u517c\u5bb9\u65e7\u5de5\u4f5c\u6d41\uff0c\u65b0\u7248\u754c\u9762\u4f1a\u9690\u85cf\u5b83\u3002"}),
                 "font_style": (FONT_STYLE_CHOICES, {"default": "\u9ed8\u8ba4", "tooltip": "\u6587\u5b57\u5b57\u4f53\u98ce\u683c\u3002"}),
                 "layout_json": ("STRING", {"default": "{}", "multiline": True, "tooltip": "拖拽框保存的位置数据，通常不用改。"}),
                 "auto_adapt": ("BOOLEAN", {"default": True, "tooltip": "兼容旧工作流，新版使用拖拽画布自定义。"}),
@@ -629,7 +628,6 @@ class FreeCameraWatermark:
         self,
         image,
         mode,
-        preset,
         font_style,
         layout_json,
         auto_adapt,
