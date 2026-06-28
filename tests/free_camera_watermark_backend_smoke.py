@@ -2,6 +2,7 @@ import importlib.util
 import pathlib
 
 import torch
+from PIL import Image
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -52,3 +53,7 @@ assert torch.count_nonzero(pattern).item() > 0, "pattern mode must alter pixels"
 layout = fcw._resolve_layout('{"mode":"图案水印","x":7.7,"y":46.9,"w":78,"h":100}', "图案水印", 64, 96)
 assert layout["x"] == 39.0, layout
 assert layout["y"] == 50.0, layout
+
+logo = Image.new("RGBA", (100, 100), (255, 255, 255, 255))
+scaled = fcw._scaled_logo(logo, 80, 255, target_height=20)
+assert scaled.size == (20, 20), scaled.size

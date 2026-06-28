@@ -359,8 +359,10 @@ def _resolve_layout(layout_json, mode, width, height):
     return layout
 
 
-def _scaled_logo(logo_image, target_width, logo_opacity):
+def _scaled_logo(logo_image, target_width, logo_opacity, target_height=None):
     ratio = target_width / max(1, logo_image.width)
+    if target_height is not None and target_height > 0:
+        ratio = min(ratio, target_height / max(1, logo_image.height))
     size = (max(1, int(logo_image.width * ratio)), max(1, int(logo_image.height * ratio)))
     logo_image = logo_image.resize(size, Image.LANCZOS)
     if logo_opacity < 255:
@@ -408,8 +410,8 @@ def _draw_bar(base, center_y, bar_height, bar_color, bar_opacity):
     base.alpha_composite(layer)
 
 
-def _draw_logo(base, logo_image, center_x, center_y, target_width, logo_opacity):
-    logo_image = _scaled_logo(logo_image, target_width, _opacity(logo_opacity))
+def _draw_logo(base, logo_image, center_x, center_y, target_width, logo_opacity, target_height=None):
+    logo_image = _scaled_logo(logo_image, target_width, _opacity(logo_opacity), target_height)
     x, y = _center_to_xy(center_x, center_y, logo_image.width, logo_image.height)
     base.alpha_composite(logo_image, (x, y))
     return logo_image.width, logo_image.height
@@ -678,11 +680,11 @@ class FreeCameraWatermark:
                 _draw_pattern(base, pattern_type, pattern_seed, pattern_density, pattern_scale_min, pattern_scale_max, main_color, main_opacity, bounds)
             elif mode == "Transparent Watermark":
                 if logo_image is not None:
-                    _draw_logo(base, logo_image, center_x, center_y, target_width, main_opacity)
+                    _draw_logo(base, logo_image, center_x, center_y, target_width, main_opacity, target_height)
                 else:
                     _draw_text_block(base, [line_1, line_2, line_3], center_x, center_y, target_width, font_style, font_size, main_color, main_opacity)
             elif mode == "Logo" and logo_image is not None:
-                _draw_logo(base, logo_image, center_x, center_y, target_width, main_opacity)
+                _draw_logo(base, logo_image, center_x, center_y, target_width, main_opacity, target_height)
             elif mode == "Logo + Text":
                 self._render_logo_text(base, logo_image, center_x, center_y, target_width, layout.get("layout", "Logo Left"), [line_1, line_2, line_3], font_style, font_size, main_color, main_opacity, main_opacity)
             elif mode in ("Text", "Camera Bar"):

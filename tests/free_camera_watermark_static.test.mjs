@@ -11,6 +11,8 @@ assert.match(frontend, /type\s*=\s*["']color["']/, "color picker must use native
 assert.doesNotMatch(frontend, /Object\.defineProperty\s*\(\s*widget\s*,\s*["']value["']/, "mode changes must not rely on redefining widget.value");
 assert.doesNotMatch(frontend, /widget\.draw\s*=\s*\(/, "frontend must not hand draw controls inside a LiteGraph widget");
 assert.doesNotMatch(frontend, /class\s+WatermarkTransformWidget/, "drag UI must not use the old canvas transform widget");
+assert.match(frontend, /function\s+referenceImage/, "drag preview must prefer the connected input image");
+assert.match(frontend, /origin_id/, "drag preview must inspect the linked upstream image node");
 
 assert.match(backend, /"layout_json":\s*\("STRING"/, "backend must keep hidden layout_json state");
 assert.match(backend, /"text_color":\s*\("STRING"/, "backend must keep text_color state");

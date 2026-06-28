@@ -95,10 +95,29 @@ function hexColor(value, fallback = "#ffffff") {
     return fallback;
 }
 
+function linkedInputImage(node) {
+    const input = node?.inputs?.find((slot) => slot?.name === "image");
+    const linkId = input?.link;
+    const link = linkId != null ? node?.graph?.links?.[linkId] : null;
+    const origin = link ? node?.graph?.getNodeById?.(link.origin_id) : null;
+    return origin?.imgs?.[origin?.imageIndex || 0] || origin?.imgs?.[0] || null;
+}
+
+function referenceImage(node) {
+    return linkedInputImage(node) || node?.imgs?.[0] || null;
+}
+
+function imageSize(node) {
+    const img = referenceImage(node);
+    return {
+        width: img?.naturalWidth || img?.width || 0,
+        height: img?.naturalHeight || img?.height || 0,
+        src: img?.src || "",
+    };
+}
+
 function imageAspect(node) {
-    const img = node?.imgs?.[0];
-    const width = img?.naturalWidth || img?.width;
-    const height = img?.naturalHeight || img?.height;
+    const { width, height } = imageSize(node);
     if (width && height) {
         return width / height;
     }
@@ -287,8 +306,9 @@ function updateBox(panel) {
     box.style.top = `${y - h / 2}px`;
     box.style.width = `${w}px`;
     box.style.height = `${h}px`;
-    const approxW = Math.round((layout.w / 100) * (node.imgs?.[0]?.naturalWidth || node.imgs?.[0]?.width || 0));
-    const approxH = Math.round((layout.h / 100) * (node.imgs?.[0]?.naturalHeight || node.imgs?.[0]?.height || 0));
+    const refSize = imageSize(node);
+    const approxW = Math.round((layout.w / 100) * refSize.width);
+    const approxH = Math.round((layout.h / 100) * refSize.height);
     info.textContent = `x ${round(layout.x)}%  y ${round(layout.y)}%  宽 ${round(layout.w)}%  高 ${round(layout.h)}%${approxW ? ` 约 ${approxW}×${approxH}px` : ""}`;
 }
 
@@ -297,10 +317,10 @@ function updatePreview(panel) {
     const mode = canonicalMode(getWidgetValue(node, "mode", "相机白条"));
     const aspect = imageAspect(node);
     const size = stageSize(aspect);
-    const img = node.imgs?.[0];
+    const img = imageSize(node);
     stage.style.width = `${size.w}px`;
     stage.style.height = `${size.h}px`;
-    stage.style.backgroundImage = img?.src ? `url("${img.src}")` : "";
+    stage.style.backgroundImage = img.src ? `url("${img.src}")` : "";
     const line1 = getWidgetValue(node, "line_1", "");
     const line2 = getWidgetValue(node, "line_2", "");
     if (mode === "Logo") {
@@ -602,6 +622,19 @@ function installPanel(node) {
     node.setSize?.([Math.max(node.size?.[0] || 380, 420), Math.max(node.size?.[1] || 620, 620)]);
 }
 
+function refreshPanelSoon(node) {
+    for (const delay of [0, 100, 400]) {
+        setTimeout(() => {
+            if (!node._fcwPanel) {
+                return;
+            }
+            const layout = readLayout(node);
+            writeLayout(node, { ...layout, aspect: imageAspect(node) });
+            updatePreview(node._fcwPanel);
+        }, delay);
+    }
+}
+
 app.registerExtension({
     name: "cp199712138.FreeCameraWatermark",
     async beforeRegisterNodeDef(nodeType, nodeData) {
@@ -613,19 +646,21 @@ app.registerExtension({
         nodeType.prototype.onNodeCreated = function () {
             const result = onNodeCreated?.apply(this, arguments);
             installPanel(this);
+            refreshPanelSoon(this);
             return result;
         };
 
         const onExecuted = nodeType.prototype.onExecuted;
         nodeType.prototype.onExecuted = function (message) {
             const result = onExecuted?.apply(this, arguments);
-            setTimeout(() => {
-                if (this._fcwPanel) {
-                    const layout = readLayout(this);
-                    writeLayout(this, { ...layout, aspect: imageAspect(this) });
-                    updatePreview(this._fcwPanel);
-                }
-            }, 80);
+            refreshPanelSoon(this);
+            return result;
+        };
+
+        const onConnectionsChange = nodeType.prototype.onConnectionsChange;
+        nodeType.prototype.onConnectionsChange = function () {
+            const result = onConnectionsChange?.apply(this, arguments);
+            refreshPanelSoon(this);
             return result;
         };
     },
