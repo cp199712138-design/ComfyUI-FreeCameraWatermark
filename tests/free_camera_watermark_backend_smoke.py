@@ -20,21 +20,13 @@ def run(mode, **kwargs):
         mode=mode,
         font_style="\u9ed8\u8ba4",
         layout_json=layout,
-        auto_adapt=True,
-        safe_margin=0.0,
         line_1="Test",
         line_2="Camera",
         line_3="24mm",
         font_size=14,
         text_color="#ffffff",
         text_opacity=100,
-        bar_color="#ffffff",
-        bar_opacity=100,
-        bar_height=90,
-        logo_opacity=100,
         pattern_type=kwargs.get("pattern_type", "\u6e10\u53d8\u5149\u5f71"),
-        pattern_color="#ffffff",
-        pattern_opacity=32,
         pattern_density=kwargs.get("pattern_density", 18),
         pattern_seed=kwargs.get("pattern_seed", 123),
         pattern_scale_min=kwargs.get("pattern_scale_min", 4),
@@ -56,3 +48,25 @@ assert layout["y"] == 50.0, layout
 logo = Image.new("RGBA", (100, 100), (255, 255, 255, 255))
 scaled = fcw._scaled_logo(logo, 80, 255, target_height=20)
 assert scaled.size == (20, 20), scaled.size
+
+try:
+    fcw.FreeCameraWatermark().apply_watermark(
+        image=None,
+        mode="\u76f8\u673a\u767d\u6761",
+        font_style="\u9ed8\u8ba4",
+        layout_json="{}",
+        line_1="Test",
+        line_2="Camera",
+        line_3="24mm",
+        font_size=14,
+        text_color="#ffffff",
+        text_opacity=100,
+        pattern_type="\u6e10\u53d8\u5149\u5f71",
+        pattern_density=18,
+        pattern_seed=123,
+        pattern_scale_min=4,
+        pattern_scale_max=12,
+    )
+    raise AssertionError("empty image input should raise a clear ValueError")
+except ValueError as exc:
+    assert "image input is empty" in str(exc), str(exc)

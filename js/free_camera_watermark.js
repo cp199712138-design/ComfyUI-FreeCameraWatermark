@@ -22,21 +22,13 @@ const CONTROLLED_WIDGETS = new Set([
     "mode",
     "font_style",
     "layout_json",
-    "auto_adapt",
-    "safe_margin",
     "line_1",
     "line_2",
     "line_3",
     "font_size",
     "text_color",
     "text_opacity",
-    "bar_color",
-    "bar_opacity",
-    "bar_height",
-    "logo_opacity",
     "pattern_type",
-    "pattern_color",
-    "pattern_opacity",
     "pattern_density",
     "pattern_seed",
     "pattern_scale_min",
@@ -418,8 +410,8 @@ function bindDrag(panel) {
         const point = pointerToPercent(event);
         const next = { ...drag.layout };
         if (drag.kind === "scale") {
-            next.w = clamp(point.x - drag.left, MIN_BOX, 100);
-            next.h = clamp(point.y - drag.top, MIN_BOX, 100);
+            next.w = clamp(point.x - drag.left, MIN_BOX, 100 - drag.left);
+            next.h = clamp(point.y - drag.top, MIN_BOX, 100 - drag.top);
             next.x = drag.left + next.w / 2;
             next.y = drag.top + next.h / 2;
         } else {
@@ -621,14 +613,12 @@ function installPanel(node) {
     node.setSize?.([Math.max(node.size?.[0] || 380, 420), Math.max(node.size?.[1] || 620, 620)]);
 }
 
-function refreshPanelSoon(node) {
+function schedulePreviewRefresh(node) {
     for (const delay of [0, 100, 400]) {
         setTimeout(() => {
             if (!node._fcwPanel) {
                 return;
             }
-            const layout = readLayout(node);
-            writeLayout(node, { ...layout, aspect: imageAspect(node) });
             updatePreview(node._fcwPanel);
         }, delay);
     }
@@ -645,21 +635,21 @@ app.registerExtension({
         nodeType.prototype.onNodeCreated = function () {
             const result = onNodeCreated?.apply(this, arguments);
             installPanel(this);
-            refreshPanelSoon(this);
+            schedulePreviewRefresh(this);
             return result;
         };
 
         const onExecuted = nodeType.prototype.onExecuted;
         nodeType.prototype.onExecuted = function (message) {
             const result = onExecuted?.apply(this, arguments);
-            refreshPanelSoon(this);
+            schedulePreviewRefresh(this);
             return result;
         };
 
         const onConnectionsChange = nodeType.prototype.onConnectionsChange;
         nodeType.prototype.onConnectionsChange = function () {
             const result = onConnectionsChange?.apply(this, arguments);
-            refreshPanelSoon(this);
+            schedulePreviewRefresh(this);
             return result;
         };
     },

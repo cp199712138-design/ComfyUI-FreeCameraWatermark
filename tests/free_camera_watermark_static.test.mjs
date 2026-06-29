@@ -13,10 +13,17 @@ assert.doesNotMatch(frontend, /widget\.draw\s*=\s*\(/, "frontend must not hand d
 assert.doesNotMatch(frontend, /class\s+WatermarkTransformWidget/, "drag UI must not use the old canvas transform widget");
 assert.match(frontend, /function\s+referenceImage/, "drag preview must prefer the connected input image");
 assert.match(frontend, /origin_id/, "drag preview must inspect the linked upstream image node");
+assert.doesNotMatch(frontend, /function\s+refreshPanelSoon/, "refresh helpers must not write layout during execution or connection changes");
+assert.doesNotMatch(frontend, /writeLayout\(node,\s*\{\s*\.\.\.layout,\s*aspect:/, "preview refresh must not persist aspect into layout_json");
+assert.doesNotMatch(frontend, /onExecuted[\s\S]{0,400}writeLayout/, "execution refresh must not alter saved drag layout");
+assert.doesNotMatch(frontend, /onConnectionsChange[\s\S]{0,400}writeLayout/, "connection refresh must not alter saved drag layout");
 
 assert.match(backend, /"layout_json":\s*\("STRING"/, "backend must keep hidden layout_json state");
 assert.match(backend, /"text_color":\s*\("STRING"/, "backend must keep text_color state");
 assert.match(backend, /"text_opacity":\s*\("INT"/, "backend must keep text_opacity state");
 assert.doesNotMatch(backend, /"preset":\s*\(/, "backend must not insert a preset widget before font_style");
-assert.match(backend, /"pattern_color":/, "backend must keep legacy pattern_color slot to avoid old workflow widget offset");
-assert.match(frontend, /"pattern_color"/, "frontend must hide the legacy pattern_color slot");
+assert.doesNotMatch(backend, /"auto_adapt":\s*\(/, "backend must not expose unused legacy auto_adapt");
+assert.doesNotMatch(backend, /"safe_margin":\s*\(/, "backend must not expose unused legacy safe_margin");
+assert.doesNotMatch(backend, /"bar_color":\s*\(/, "backend must not expose unused legacy bar_color");
+assert.doesNotMatch(backend, /"pattern_color":\s*\(/, "backend must not expose unused legacy pattern_color");
+assert.doesNotMatch(frontend, /"pattern_color"/, "frontend must not hide unused legacy pattern_color");

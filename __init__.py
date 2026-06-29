@@ -22,18 +22,6 @@ MODES = [
     "\u900f\u660e\u6c34\u5370",
     "\u56fe\u6848\u6c34\u5370",
 ]
-PRESETS = [
-    "\u81ea\u52a8",
-    "\u5e95\u90e8\u767d\u6761",
-    "\u5e95\u90e8\u5c0f\u5b57",
-    "\u5c45\u4e2d\u6587\u5b57",
-    "\u5e73\u94faLogo",
-    "\u53f3\u4e0bLogo",
-    "Logo\u5de6\u6587\u5b57\u53f3",
-    "\u67d4\u548c\u56fe\u6848",
-    "\u5c45\u4e2d\u7b7e\u540d",
-    "\u81ea\u5b9a\u4e49",
-]
 FONT_STYLES = [
     "\u9ed8\u8ba4",
     "\u624b\u5199",
@@ -61,18 +49,6 @@ LEGACY_MODES = [
     "Transparent Watermark",
     "Pattern Watermark",
 ]
-LEGACY_PRESETS = [
-    "Auto",
-    "Bottom Camera Bar",
-    "Minimal Bottom Caption",
-    "Center Transparent Text",
-    "Tiled Transparent Logo",
-    "Bottom Right Logo",
-    "Logo Left + Text Right",
-    "Soft Pattern Overlay",
-    "Signature Center",
-    "Custom",
-]
 LEGACY_FONT_STYLES = [
     "System Default",
     "Signature",
@@ -94,7 +70,6 @@ LEGACY_PATTERN_TYPES = [
 ]
 
 MODE_CHOICES = MODES
-PRESET_CHOICES = PRESETS
 FONT_STYLE_CHOICES = FONT_STYLES
 PATTERN_TYPE_CHOICES = PATTERN_TYPES
 
@@ -105,18 +80,6 @@ MODE_ALIASES = {
     "\u76f8\u673a\u767d\u6761": "Camera Bar",
     "\u900f\u660e\u6c34\u5370": "Transparent Watermark",
     "\u56fe\u6848\u6c34\u5370": "Pattern Watermark",
-}
-PRESET_ALIASES = {
-    "\u81ea\u52a8": "Auto",
-    "\u5e95\u90e8\u767d\u6761": "Bottom Camera Bar",
-    "\u5e95\u90e8\u5c0f\u5b57": "Minimal Bottom Caption",
-    "\u5c45\u4e2d\u6587\u5b57": "Center Transparent Text",
-    "\u5e73\u94faLogo": "Tiled Transparent Logo",
-    "\u53f3\u4e0bLogo": "Bottom Right Logo",
-    "Logo\u5de6\u6587\u5b57\u53f3": "Logo Left + Text Right",
-    "\u67d4\u548c\u56fe\u6848": "Soft Pattern Overlay",
-    "\u5c45\u4e2d\u7b7e\u540d": "Signature Center",
-    "\u81ea\u5b9a\u4e49": "Custom",
 }
 FONT_ALIASES = {
     "\u9ed8\u8ba4": "System Default",
@@ -308,43 +271,25 @@ def _load_font(font_style, size):
     return ImageFont.load_default()
 
 
-def _layout_from_preset(mode, preset, width, height, auto_adapt):
+def _default_layout(mode, width, height):
     mode = _canonical(mode, MODE_ALIASES)
-    preset = _canonical(preset, PRESET_ALIASES)
     aspect = width / max(1, height)
-    chosen = preset
-    if preset == "Auto" and auto_adapt:
-        if mode == "Logo":
-            chosen = "Bottom Right Logo"
-        elif mode == "Logo + Text":
-            chosen = "Logo Left + Text Right"
-        elif mode == "Transparent Watermark":
-            chosen = "Center Transparent Text"
-        elif mode == "Pattern Watermark":
-            chosen = "Soft Pattern Overlay"
-        elif aspect < 0.8:
-            chosen = "Bottom Camera Bar"
-        elif aspect > 1.25:
-            chosen = "Minimal Bottom Caption"
-        else:
-            chosen = "Signature Center"
-
-    layouts = {
-        "Bottom Camera Bar": {"x": 50, "y": 91, "w": 86, "h": 16, "layout": "Text Only Bar"},
-        "Minimal Bottom Caption": {"x": 50, "y": 92, "w": 72, "h": 14, "layout": "Text Only Bar"},
-        "Center Transparent Text": {"x": 50, "y": 50, "w": 72, "h": 18, "layout": "Text Only"},
-        "Tiled Transparent Logo": {"x": 50, "y": 50, "w": 36, "h": 36, "layout": "Tiled"},
-        "Bottom Right Logo": {"x": 84, "y": 88, "w": 22, "h": 16, "layout": "Logo Only"},
-        "Logo Left + Text Right": {"x": 50, "y": 88, "w": 62, "h": 16, "layout": "Logo Left"},
-        "Soft Pattern Overlay": {"x": 50, "y": 50, "w": 100, "h": 100, "layout": "Pattern Only"},
-        "Signature Center": {"x": 50, "y": 58, "w": 54, "h": 18, "layout": "Text Only"},
-    }
-    return layouts.get(chosen, {"x": 50, "y": 88, "w": 55, "h": 16, "layout": "Text Only Bar"})
+    if mode == "Logo":
+        return {"x": 50, "y": 50, "w": 42, "h": 16 if aspect < 0.8 else 24, "layout": "Logo Only"}
+    if mode == "Logo + Text":
+        return {"x": 50, "y": 86, "w": 72, "h": 10 if aspect < 0.8 else 14, "layout": "Logo Left"}
+    if mode == "Transparent Watermark":
+        return {"x": 50, "y": 50, "w": 72, "h": 16, "layout": "Text Only"}
+    if mode == "Pattern Watermark":
+        return {"x": 50, "y": 50, "w": 100, "h": 100, "layout": "Pattern Only"}
+    if mode == "Text":
+        return {"x": 50, "y": 88, "w": 74, "h": 10, "layout": "Text Only"}
+    return {"x": 50, "y": 91, "w": 86, "h": 12, "layout": "Text Only Bar"}
 
 
 def _resolve_layout(layout_json, mode, width, height):
     mode = _canonical(mode, MODE_ALIASES)
-    layout = _layout_from_preset(mode, "Auto", width, height, True)
+    layout = _default_layout(mode, width, height)
     saved = _safe_json(layout_json)
     if saved:
         saved_mode = _canonical(saved.get("mode"), MODE_ALIASES) if saved.get("mode") else None
@@ -592,21 +537,13 @@ class FreeCameraWatermark:
                 "mode": (MODE_CHOICES, {"default": "\u76f8\u673a\u767d\u6761", "tooltip": "\u9009\u62e9\u6c34\u5370\u7c7b\u578b\u3002"}),
                 "font_style": (FONT_STYLE_CHOICES, {"default": "\u9ed8\u8ba4", "tooltip": "\u6587\u5b57\u5b57\u4f53\u98ce\u683c\u3002"}),
                 "layout_json": ("STRING", {"default": "{}", "multiline": True, "tooltip": "拖拽框保存的位置数据，通常不用改。"}),
-                "auto_adapt": ("BOOLEAN", {"default": True, "tooltip": "兼容旧工作流，新版使用拖拽画布自定义。"}),
-                "safe_margin": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 25.0, "step": 0.5, "tooltip": "兼容旧工作流。"}),
                 "line_1": ("STRING", {"default": "iPhone 18 SuperPro Max"}),
                 "line_2": ("STRING", {"default": "Main Camera"}),
                 "line_3": ("STRING", {"default": "24mm | f/1.8 | 1/125s | ISO 50"}),
                 "font_size": ("INT", {"default": 28, "min": 6, "max": 256, "step": 1, "tooltip": "文字大小。"}),
                 "text_color": ("STRING", {"default": "#ffffff", "tooltip": "主颜色：用于文字、白条、透明水印和图案。"}),
                 "text_opacity": ("INT", {"default": 100, "min": 0, "max": 100, "step": 1, "tooltip": "透明度：0 看不见，100 不透明。"}),
-                "bar_color": ("STRING", {"default": "#ffffff", "tooltip": "兼容旧工作流，新版改用主颜色。"}),
-                "bar_opacity": ("INT", {"default": 100, "min": 0, "max": 255, "step": 1, "tooltip": "兼容旧工作流，新版改用透明度。"}),
-                "bar_height": ("INT", {"default": 90, "min": 0, "max": 1024, "step": 1, "tooltip": "兼容旧工作流，新版用拖拽框高度控制。"}),
-                "logo_opacity": ("INT", {"default": 100, "min": 0, "max": 255, "step": 1, "tooltip": "兼容旧工作流，新版改用统一透明度。"}),
                 "pattern_type": (PATTERN_TYPE_CHOICES, {"default": "\u6e10\u53d8\u5149\u5f71", "tooltip": "\u56fe\u6848\u6837\u5f0f\u3002"}),
-                "pattern_color": ("STRING", {"default": "#ffffff", "tooltip": "兼容旧工作流，新版改用主颜色。"}),
-                "pattern_opacity": ("INT", {"default": 32, "min": 0, "max": 255, "step": 1, "tooltip": "兼容旧工作流，新版改用透明度。"}),
                 "pattern_density": ("INT", {"default": 18, "min": 1, "max": 100, "step": 1, "tooltip": "图案数量。"}),
                 "pattern_seed": ("INT", {"default": 20260623, "min": 0, "max": 2147483647, "step": 1, "tooltip": "随机种子。"}),
                 "pattern_scale_min": ("INT", {"default": 6, "min": 1, "max": 512, "step": 1, "tooltip": "图案最小尺寸。"}),
@@ -630,21 +567,13 @@ class FreeCameraWatermark:
         mode,
         font_style,
         layout_json,
-        auto_adapt,
-        safe_margin,
         line_1,
         line_2,
         line_3,
         font_size,
         text_color,
         text_opacity,
-        bar_color,
-        bar_opacity,
-        bar_height,
-        logo_opacity,
         pattern_type,
-        pattern_color,
-        pattern_opacity,
         pattern_density,
         pattern_seed,
         pattern_scale_min,
@@ -658,6 +587,11 @@ class FreeCameraWatermark:
         main_color = text_color
         main_opacity = _ui_opacity(text_opacity)
         output_images = []
+
+        if image is None:
+            raise ValueError("Free Camera Watermark: image input is empty. Check the upstream image node.")
+        if not hasattr(image, "shape") or len(image.shape) < 4:
+            raise ValueError("Free Camera Watermark: image input must be a ComfyUI IMAGE batch.")
 
         for index in range(image.shape[0]):
             base = _tensor_to_pil(image[index])
