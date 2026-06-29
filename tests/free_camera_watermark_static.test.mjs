@@ -17,6 +17,11 @@ assert.doesNotMatch(frontend, /function\s+refreshPanelSoon/, "refresh helpers mu
 assert.doesNotMatch(frontend, /writeLayout\(node,\s*\{\s*\.\.\.layout,\s*aspect:/, "preview refresh must not persist aspect into layout_json");
 assert.doesNotMatch(frontend, /onExecuted[\s\S]{0,400}writeLayout/, "execution refresh must not alter saved drag layout");
 assert.doesNotMatch(frontend, /onConnectionsChange[\s\S]{0,400}writeLayout/, "connection refresh must not alter saved drag layout");
+assert.match(frontend, /const\s+DRAG_THRESHOLD_PX\s*=/, "dragging must ignore tiny pointer jitter");
+assert.match(frontend, /function\s+moveLayoutByDelta/, "dragging must use pixel delta instead of absolute pointer jumps");
+assert.match(frontend, /pointerId/, "dragging must track a single active pointer");
+assert.match(frontend, /pointercancel/, "dragging must clean up cancelled pointers");
+assert.doesNotMatch(frontend, /const\s+layout\s*=\s*\{\s*\.\.\.readLayout\(node\),\s*x:\s*point\.x,\s*y:\s*point\.y\s*\}/, "blank stage clicks must not instantly move the watermark");
 
 assert.match(backend, /"layout_json":\s*\("STRING"/, "backend must keep hidden layout_json state");
 assert.match(backend, /"text_color":\s*\("STRING"/, "backend must keep text_color state");

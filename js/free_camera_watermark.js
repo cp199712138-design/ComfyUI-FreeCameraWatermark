@@ -3,6 +3,7 @@ import { app } from "/scripts/app.js";
 const NODE_NAME = "FreeCameraWatermark";
 const DOM_WIDGET = "fcw_dom_panel";
 const MIN_BOX = 4;
+const DRAG_THRESHOLD_PX = 4;
 
 const MODES = ["文字", "Logo", "Logo+文字", "相机白条", "透明水印", "图案水印"];
 const MODE_TO_EN = {
@@ -196,6 +197,37 @@ function writeLayout(node, layout) {
     dirtyNode(node);
 }
 
+function pointerToStagePoint(stage, event) {
+    const rect = stage.getBoundingClientRect();
+    return {
+        rect,
+        x: ((event.clientX - rect.left) / rect.width) * 100,
+        y: ((event.clientY - rect.top) / rect.height) * 100,
+    };
+}
+
+function moveLayoutByDelta(layout, dxPx, dyPx, rect) {
+    return {
+        ...layout,
+        x: layout.x + (dxPx / rect.width) * 100,
+        y: layout.y + (dyPx / rect.height) * 100,
+    };
+}
+
+function scaleLayoutToPointer(layout, point) {
+    const left = layout.x - layout.w / 2;
+    const top = layout.y - layout.h / 2;
+    const w = clamp(point.x - left, MIN_BOX, 100 - left);
+    const h = clamp(point.y - top, MIN_BOX, 100 - top);
+    return {
+        ...layout,
+        x: left + w / 2,
+        y: top + h / 2,
+        w,
+        h,
+    };
+}
+
 function hideWidget(widget) {
     widget.hidden = true;
     widget.type = "hidden";
@@ -362,30 +394,25 @@ function syncFromWidgets(panel) {
 function bindDrag(panel) {
     const { node, stage, box, handle } = panel;
     let drag = null;
-    const pointerToPercent = (event) => {
-        const rect = stage.getBoundingClientRect();
-        return {
-            x: ((event.clientX - rect.left) / rect.width) * 100,
-            y: ((event.clientY - rect.top) / rect.height) * 100,
-        };
-    };
     const stop = (event) => {
         event.preventDefault();
         event.stopPropagation();
     };
     const startDrag = (event, kind) => {
+        if (event.button !== 0) {
+            return;
+        }
         stop(event);
+        const point = pointerToStagePoint(stage, event);
         const layout = readLayout(node);
-        const point = pointerToPercent(event);
-        const left = layout.x - layout.w / 2;
-        const top = layout.y - layout.h / 2;
         drag = {
             kind,
+            pointerId: event.pointerId,
+            started: false,
+            startClientX: event.clientX,
+            startClientY: event.clientY,
             layout,
-            left,
-            top,
-            offsetX: point.x - layout.x,
-            offsetY: point.y - layout.y,
+            rect: point.rect,
         };
         event.currentTarget.setPointerCapture?.(event.pointerId);
     };
@@ -394,41 +421,45 @@ function bindDrag(panel) {
             return;
         }
         stop(event);
-        const point = pointerToPercent(event);
-        const layout = { ...readLayout(node), x: point.x, y: point.y };
-        writeLayout(node, layout);
-        updateBox(panel);
-        startDrag(event, "move");
     });
     box.addEventListener("pointerdown", (event) => startDrag(event, "move"));
     handle.addEventListener("pointerdown", (event) => startDrag(event, "scale"));
     const onMove = (event) => {
-        if (!drag) {
+        if (!drag || event.pointerId !== drag.pointerId) {
             return;
         }
         stop(event);
-        const point = pointerToPercent(event);
-        const next = { ...drag.layout };
+        const distance = Math.hypot(event.clientX - drag.startClientX, event.clientY - drag.startClientY);
+        if (!drag.started) {
+            if (distance < DRAG_THRESHOLD_PX) {
+                return;
+            }
+            drag.started = true;
+        }
+        let next;
         if (drag.kind === "scale") {
-            next.w = clamp(point.x - drag.left, MIN_BOX, 100 - drag.left);
-            next.h = clamp(point.y - drag.top, MIN_BOX, 100 - drag.top);
-            next.x = drag.left + next.w / 2;
-            next.y = drag.top + next.h / 2;
+            next = scaleLayoutToPointer(drag.layout, pointerToStagePoint(stage, event));
         } else {
-            next.x = clamp(point.x - drag.offsetX, 0, 100);
-            next.y = clamp(point.y - drag.offsetY, 0, 100);
+            next = moveLayoutByDelta(
+                drag.layout,
+                event.clientX - drag.startClientX,
+                event.clientY - drag.startClientY,
+                drag.rect
+            );
         }
         writeLayout(node, next);
         updateBox(panel);
     };
     const onUp = (event) => {
-        if (drag) {
-            stop(event);
-            drag = null;
+        if (!drag || event.pointerId !== drag.pointerId) {
+            return;
         }
+        stop(event);
+        drag = null;
     };
     document.addEventListener("pointermove", onMove, true);
     document.addEventListener("pointerup", onUp, true);
+    document.addEventListener("pointercancel", onUp, true);
 }
 
 function createPanel(node) {
